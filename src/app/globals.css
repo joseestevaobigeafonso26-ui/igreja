@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@keyframes pulse-red {
+  0% { box-shadow: 0 0 0 0 rgba(200, 75, 35, 0.7); }
+  70% { box-shadow: 0 0 0 10px rgba(200, 75, 35, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(200, 75, 35, 0); }
+}
+.badge-live { animation: pulse-red 2s infinite; }
