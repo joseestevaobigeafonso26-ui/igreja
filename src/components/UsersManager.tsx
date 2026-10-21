@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-type U = { id: string; email: string; nome: string; role: string; eu: boolean };
+type U = { id: string; email: string; nome: string; role: string; ativo: boolean; eu: boolean };
 const ROLES = ["membro", "professor", "pastor", "admin"];
 
 async function api(method: string, body?: unknown) {
@@ -63,7 +63,7 @@ export default function UsersManager() {
           <tbody>
             {users.map((u) => (
               <tr key={u.id} className="border-t border-slate-100">
-                <td className="px-3 py-2">{u.nome}{u.eu && " (você)"}</td>
+                <td className="px-3 py-2">{u.nome}{u.eu && " (você)"}{!u.ativo && <span className="ml-2 rounded bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">não ativada</span>}</td>
                 <td className="px-3 py-2">{u.email}</td>
                 <td className="px-3 py-2">
                   <select disabled={u.eu} value={u.role} onChange={(e) => setRole(u.id, e.target.value)} className="rounded border border-slate-300 px-2 py-1">
@@ -71,6 +71,7 @@ export default function UsersManager() {
                   </select>
                 </td>
                 <td className="space-x-3 whitespace-nowrap px-3 py-2">
+                  {!u.eu && !u.ativo && <button className="font-semibold text-blue-700" onClick={() => run(() => api("PATCH", { id: u.id, ativo: true }), "Conta ativada ✓")}>Ativar</button>}
                   {!u.eu && <button className="font-semibold text-green-700" onClick={() => run(() => api("PATCH", { id: u.id, role: u.role }), "Papel guardado ✓")}>Guardar papel</button>}
                   <button className="text-slate-700 underline" onClick={() => {
                     const p = prompt(`Nova senha para ${u.email} (mín. 8 caracteres):`);

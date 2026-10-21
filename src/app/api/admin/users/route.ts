@@ -28,12 +28,12 @@ export async function GET(req: NextRequest) {
   try {
     const a = await authorize(req); if (!a) return fail("Sem permissão.", 403);
     const { data } = await a.admin.auth.admin.listUsers({ perPage: 200 });
-    const { data: profiles } = await a.admin.from("profiles").select("id, nome, role");
+    const { data: profiles } = await a.admin.from("profiles").select("id, nome, role, ativo");
     const users = (data?.users ?? [])
       .filter((u) => !u.is_anonymous)
       .map((u) => {
         const p = profiles?.find((x) => x.id === u.id);
-        return { id: u.id, email: u.email, nome: p?.nome ?? "", role: p?.role ?? "membro", eu: u.id === a.callerId };
+        return { id: u.id, email: u.email, nome: p?.nome ?? "", role: p?.role ?? "membro", ativo: p?.ativo ?? false, eu: u.id === a.callerId };
       });
     return NextResponse.json({ users });
   } catch (e: any) { return fail(e.message, 500); }
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     const { data, error } = await a.admin.auth.admin.createUser({ email, password, email_confirm: true });
     if (error || !data.user) return fail(error?.message ?? "Erro ao criar utilizador.");
     // O trigger já criou o perfil; aqui definimos nome e papel.
-    await a.admin.from("profiles").upsert({ id: data.user.id, nome: nome || String(email).split("@")[0], role });
+    await a.admin.from("profiles").upsert({ id: data.user.id, nome: nome || String(email).split("@")[0], role, ativo: true });
     return NextResponse.json({ ok: true });
   } catch (e: any) { return fail(e.message, 500); }
 }
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const a = await authorize(req); if (!a) return fail("Sem permissão.", 403);
-    const { id, role, nome, password } = await req.json();
+    const { id, role, nome, password, ativo } = await req.json();
     if (!id) return fail("Falta o id.");
     if (role !== undefined) {
       if (!ROLES.includes(role)) return fail("Papel inválido.");
@@ -66,6 +66,7 @@ export async function PATCH(req: NextRequest) {
     const patch: Record<string, string> = {};
     if (role !== undefined) patch.role = role;
     if (nome !== undefined) patch.nome = nome;
+    if (ativo !== undefined) { if (id === a.callerId) return fail("Não pode alterar a sua própria ativação."); (patch as any).ativo = !!ativo; }
     if (Object.keys(patch).length) {
       const { error } = await a.admin.from("profiles").update(patch).eq("id", id);
       if (error) return fail(error.message);

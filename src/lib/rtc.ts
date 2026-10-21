@@ -71,7 +71,10 @@ async function ensureSession() {
   const { data } = await supabase.auth.getSession();
   if (!data.session) {
     const { error } = await supabase.auth.signInAnonymously();
-    if (error) throw new Error("Ative \"Allow anonymous sign-ins\" no Supabase (Authentication → Sign In / Providers).");
+    if (error)
+      throw new Error(
+        `Não foi possível entrar como visitante (${error.message}). No Supabase, em Authentication → Sign In / Providers, deixe LIGADOS "Allow anonymous sign-ins" e "Allow new users to sign up".`
+      );
   }
   await supabase.realtime.setAuth();
 }
@@ -95,17 +98,23 @@ async function openChannel(room: string, side: "host" | "viewer", onSignal: (s: 
   const rx = supabase.channel(rxTopic, cfg);
   const tx = supabase.channel(txTopic, cfg);
   rx.on("broadcast", { event: "signal" }, ({ payload }) => onSignal(payload as Signal));
-  const sub = (ch: RealtimeChannel) =>
+  // O espectador só ESCREVE no canal "viewers" (não tem permissão de leitura), então envia por HTTP
+  // (httpSend) sem entrar nele. O transmissor tem leitura e escrita e usa WebSocket.
+  const restSend = side === "viewer";
+  const sub = (ch: RealtimeChannel, topic: string) =>
     new Promise<void>((res, rej) =>
-      ch.subscribe((st) => {
+      ch.subscribe((st, err) => {
         if (st === "SUBSCRIBED") res();
         else if (st === "CHANNEL_ERROR" || st === "TIMED_OUT")
-          rej(new Error("Sem permissão no canal de transmissão. Execute o schema_v4.sql e confirme o login."));
+          rej(new Error(`Sem permissão no canal "${topic}" (${err?.message ?? st}). Confirme que executou os schema_v4, v5 e v6 no Supabase.`));
       })
     );
-  await Promise.all([sub(rx), sub(tx)]);
+  await Promise.all(restSend ? [sub(rx, rxTopic)] : [sub(rx, rxTopic), sub(tx, txTopic)]);
   return {
-    send: (payload) => { tx.send({ type: "broadcast", event: "signal", payload }); },
+    send: (payload) => {
+      if (restSend) tx.httpSend("signal", payload).catch((e) => console.warn("httpSend falhou:", e));
+      else tx.send({ type: "broadcast", event: "signal", payload });
+    },
     close: () => { supabase.removeChannel(rx); supabase.removeChannel(tx); },
   };
 }

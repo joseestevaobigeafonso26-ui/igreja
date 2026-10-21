@@ -3,11 +3,11 @@
 Next.js (App Router) + React + Tailwind + Supabase + WebRTC.
 
 ## Arrancar
-1. Crie um projeto no Supabase e execute `supabase/schema.sql` depois `schema_v2.sql`, `schema_v3.sql`, `schema_v4.sql` e `schema_v5.sql` no SQL Editor.
+1. Crie um projeto no Supabase e execute `supabase/schema.sql` depois `schema_v2.sql`, `schema_v3.sql`, `schema_v4.sql`, `schema_v5.sql` e `schema_v6.sql` no SQL Editor.
 2. Em Authentication → Sign In / Providers, ative **Allow anonymous sign-ins** (os espectadores entram assim, sem criar conta).
 2. `cp .env.example .env.local` e preencha URL e chave anon (Settings → API).
 3. Primeiro acesso do pastor: Supabase → Authentication → Users → Add user → Create new user (email + senha, marque *Auto Confirm User*). Depois, no SQL Editor: `update profiles set role = 'pastor' where id = (select id from auth.users where email = 'EMAIL_DO_PASTOR');`
-4. Em Authentication → Sign In / Providers, **desative "Allow new users to sign up"** (ninguém cria conta sozinho). Os restantes acessos são criados pelo pastor em **/admin → Utilizadores**.
+4. Em Authentication → Sign In / Providers, deixe **LIGADOS** "Allow anonymous sign-ins" e "Allow new users to sign up" (os espectadores entram como anónimos, e isso conta como novo utilizador). Contas criadas por estranhos ficam "não ativadas" (`schema_v6.sql`) e não têm poder nenhum; os acessos reais são criados pelo pastor em **/admin → Utilizadores**.
 5. Preencha `SUPABASE_SERVICE_ROLE_KEY` no `.env.local` (chave secreta, só servidor).
 6. `npm install && npm run dev` e entre em `/entrar` com email e senha.
 
@@ -36,3 +36,9 @@ Em /admin → **Câmara remota**, nos dois aparelhos com conta da equipa: escolh
 no computador "Este aparelho é o monitor". O computador vê a imagem e clica em "Transmitir ao vivo". As salas `cam-*` só a equipa recebe (`schema_v5.sql`).
 Nota: navegadores móveis não partilham o ECRÃ do telemóvel (só a câmara). Para mostrar o ecrã do telemóvel, espelhe-o no computador
 (Android: scrcpy; iPhone: AirPlay/QuickTime) e use "Partilhar ecrã" no computador.
+
+## Diagnóstico: "Sem permissão no canal"
+No SQL Editor do Supabase, confirme que as regras existem:
+`select policyname, cmd, roles from pg_policies where schemaname = 'realtime' and tablename = 'messages';`
+Devem aparecer 5 linhas com "live": `live host: todos recebem`, `live host: so equipa envia`, `live viewers: todos enviam`,
+`live viewers: so equipa recebe` e `live cam: so equipa recebe`. Se faltar alguma, execute o schema_v4/v5 correspondente.
