@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useBroadcaster, useIsLive, useViewer, type Source } from "@/lib/rtc";
 import { useRole } from "@/lib/auth";
+import Interaction from "@/components/Interaction";
 
 export function Video({ stream, muted }: { stream: MediaStream | null; muted?: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
@@ -64,7 +65,7 @@ function Broadcaster({ room }: { room: string }) {
   );
 }
 
-export default function LiveRoom({ room, title }: { room: string; title: string }) {
+export default function LiveRoom({ room, title, mode = "simples" }: { room: string; title: string; mode?: "simples" | "interativo" }) {
   const { isStaff, loading } = useRole();
   const live = useIsLive(room);
   return (
@@ -76,6 +77,7 @@ export default function LiveRoom({ room, title }: { room: string; title: string 
         )}
       </div>
       {loading ? null : isStaff ? <Broadcaster room={room} /> : <Viewer room={room} />}
+      {live && !loading && <Interaction room={room} mode={mode} />}
     </section>
   );
 }

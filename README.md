@@ -3,7 +3,7 @@
 Next.js (App Router) + React + Tailwind + Supabase + WebRTC.
 
 ## Arrancar
-1. Crie um projeto no Supabase e execute `supabase/schema.sql` depois `schema_v2.sql`, `schema_v3.sql`, `schema_v4.sql`, `schema_v5.sql`, `schema_v6.sql` e `schema_v7.sql` no SQL Editor.
+1. Crie um projeto no Supabase e execute `supabase/schema.sql` depois `schema_v2.sql`, `schema_v3.sql`, `schema_v4.sql`, `schema_v5.sql`, `schema_v6.sql`, `schema_v7.sql` e `schema_v8.sql` no SQL Editor.
 2. Em Authentication → Sign In / Providers, ative **Allow anonymous sign-ins** (os espectadores entram assim, sem criar conta).
 2. `cp .env.example .env.local` e preencha URL e chave anon (Settings → API).
 3. Primeiro acesso do pastor: Supabase → Authentication → Users → Add user → Create new user (email + senha, marque *Auto Confirm User*). Depois, no SQL Editor: `update profiles set role = 'pastor' where id = (select id from auth.users where email = 'EMAIL_DO_PASTOR');`
@@ -49,3 +49,11 @@ A segurança é por assinatura digital: a cada transmissão a equipa cria uma ch
 os espectadores só aceitam ofertas com assinatura válida, por isso ninguém consegue injetar vídeo falso.
 Limites: o canal é público, então outros visitantes técnicos podem ver os dados de ligação (inclui IP) trocados no canal; um abusador pode ocupar vagas
 (teto de 40 espectadores) mas não consegue trocar o vídeo. As salas `cam-*` (câmara remota) continuam privadas, só para a equipa.
+
+## Reações, comentários e interação
+Enquanto uma sala está ao vivo aparece, por baixo do vídeo, o painel de interação (sem precisar de conta):
+- **Reações** (👍 ❤️ 🙏 🙌 😮) que sobem no ecrã e contadores; vão por canal em tempo real e não ficam guardadas.
+- **Comentários** guardados em `live_comments` (só enquanto a sala está ao vivo; limite de 1 mensagem/2 s por pessoa e 60/min por endereço).
+- **Culto e agenda** (modo simples): reações e comentários.
+- **Discipulado e teologia** (modo interativo): além disso, "✋ pergunta ao responsável", lista de participantes e, para a equipa, fixar mensagem, marcar pergunta como respondida e apagar.
+O servidor decide o selo de cada mensagem (Responsável / Membro / visitante); ninguém consegue fingir ser o responsável.

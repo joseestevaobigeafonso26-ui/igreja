@@ -13,7 +13,7 @@ export default async function Page() {
         <p className="text-sm text-slate-500">Trilhas de formação 1-para-1 e vida cristã prática.</p>
       </div>
       <div className="grid gap-6 lg:grid-cols-2">
-        <LiveRoom room="discipulado" title="Aula de discipulado ao vivo" />
+        <LiveRoom mode="interativo" room="discipulado" title="Aula de discipulado ao vivo" />
         <CourseList courses={courses} />
       </div>
     </>
