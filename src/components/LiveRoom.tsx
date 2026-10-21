@@ -3,14 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import { useBroadcaster, useIsLive, useViewer, type Source } from "@/lib/rtc";
 import { useRole } from "@/lib/auth";
 
-function Video({ stream, muted }: { stream: MediaStream | null; muted?: boolean }) {
+export function Video({ stream, muted }: { stream: MediaStream | null; muted?: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => { if (ref.current) ref.current.srcObject = stream; }, [stream]);
   return <video ref={ref} autoPlay playsInline muted={muted} controls={!muted} className="h-full w-full object-contain" />;
 }
 
 function Viewer({ room }: { room: string }) {
-  const { stream, error } = useViewer(room);
+  const { stream, error, status } = useViewer(room);
   const live = useIsLive(room);
   return (
     <div className="aspect-video overflow-hidden rounded-xl bg-black">
@@ -18,7 +18,7 @@ function Viewer({ room }: { room: string }) {
         <Video stream={stream} />
       ) : (
         <div className="flex h-full items-center justify-center p-6 text-center text-sm text-slate-400">
-          {error ?? (live ? "A ligar à transmissão…" : "Sem transmissão neste momento. Quando começar, o vídeo aparece aqui automaticamente.")}
+          {error ?? (live ? status : "Sem transmissão neste momento. Quando começar, o vídeo aparece aqui automaticamente.")}
         </div>
       )}
     </div>

@@ -8,15 +8,40 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 
-const iceServers: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
+const iceServers: RTCIceServer[] = [
+  { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+];
 if (process.env.NEXT_PUBLIC_TURN_URL) {
   iceServers.push({
-    urls: process.env.NEXT_PUBLIC_TURN_URL,
+    // Várias URLs separadas por vírgula (udp 80/443 e tcp/tls 443 aumentam a chance de passar redes móveis)
+    urls: process.env.NEXT_PUBLIC_TURN_URL.split(",").map((u) => u.trim()).filter(Boolean),
     username: process.env.NEXT_PUBLIC_TURN_USER,
     credential: process.env.NEXT_PUBLIC_TURN_CRED,
   });
 }
-const RTC_CONFIG: RTCConfiguration = { iceServers };
+
+// Credenciais TURN temporárias vêm de /api/turn (Cloudflare). Guardadas 1 h no navegador.
+let cachedCfg: { cfg: RTCConfiguration; at: number } | null = null;
+async function rtcConfig(): Promise<RTCConfiguration> {
+  if (cachedCfg && Date.now() - cachedCfg.at < 3600_000) return cachedCfg.cfg;
+  let extra: RTCIceServer[] = [];
+  try {
+    const { data } = await supabase.auth.getSession();
+    const res = await fetch("/api/turn", { headers: { Authorization: `Bearer ${data.session?.access_token}` } });
+    if (res.ok) {
+      const j = await res.json();
+      if (Array.isArray(j.iceServers)) extra = j.iceServers;
+    }
+  } catch {}
+  const cfg: RTCConfiguration = { iceServers: [...iceServers, ...extra] };
+  if (extra.length) cachedCfg = { cfg, at: Date.now() }; // só guarda se o TURN respondeu
+  return cfg;
+}
+/** Sessão + configuração ICE prontas ANTES de abrir canais (evita perder candidatos ICE). */
+async function prepare() {
+  await ensureSession();
+  return rtcConfig();
+}
 
 type Signal =
   | { type: "viewer-join"; from: string }
@@ -95,13 +120,15 @@ export function useBroadcaster(room: string) {
   const peers = useRef(new Map<string, RTCPeerConnection>());
   const chRef = useRef<Link | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const externalRef = useRef(false); // true quando a fonte é um stream recebido (câmara remota)
 
   const stop = useCallback(async () => {
     chRef.current?.send({ type: "broadcaster-stop" });
     peers.current.forEach((pc) => pc.close());
     peers.current.clear();
-    streamRef.current?.getTracks().forEach((t) => t.stop());
+    if (!externalRef.current) streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    externalRef.current = false;
     chRef.current?.close();
     chRef.current = null;
     setStream(null);
@@ -109,12 +136,15 @@ export function useBroadcaster(room: string) {
     await supabase.from("live_sessions").update({ is_live: false }).eq("room", room);
   }, [room]);
 
-  const start = useCallback(async (source: Source) => {
+  const start = useCallback(async (source: Source | MediaStream) => {
     setError(null);
     try {
       // IMPORTANTE: isto é chamado a partir de um clique (exigência dos navegadores).
       let media: MediaStream;
-      if (source === "tela") {
+      if (source instanceof MediaStream) {
+        media = source; // retransmitir o que o telemóvel está a filmar
+        externalRef.current = true;
+      } else if (source === "tela") {
         if (!navigator.mediaDevices?.getDisplayMedia)
           throw new Error("Este dispositivo não suporta partilha de ecrã. Use a opção Câmara.");
         media = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: true });
@@ -132,21 +162,23 @@ export function useBroadcaster(room: string) {
         });
       }
       streamRef.current = media;
-      media.getVideoTracks()[0].onended = () => stop(); // botão "Parar partilha" do navegador
+      const vt = media.getVideoTracks()[0];
+      if (vt) vt.onended = () => stop(); // botão "Parar partilha" do navegador
 
+      const cfg = await prepare();
       let link: Link | undefined;
       const send = (p: Signal) => link?.send(p);
       link = await openChannel(room, "host", async (s) => {
         if (s.type === "viewer-join") {
           if (!peers.current.has(s.from) && peers.current.size >= MAX_VIEWERS) return;
           peers.current.get(s.from)?.close();
-          const pc = new RTCPeerConnection(RTC_CONFIG);
+          const pc = new RTCPeerConnection(cfg);
           peers.current.set(s.from, pc);
           media.getTracks().forEach((t) => pc.addTrack(t, media));
           pc.onicecandidate = (e) =>
             e.candidate && send({ type: "ice", to: s.from, from: "host", candidate: e.candidate.toJSON() });
           pc.onconnectionstatechange = () => {
-            if (["failed", "closed", "disconnected"].includes(pc.connectionState)) {
+            if (["failed", "closed"].includes(pc.connectionState)) {
               pc.close();
               peers.current.delete(s.from);
               setViewers(peers.current.size);
@@ -154,6 +186,14 @@ export function useBroadcaster(room: string) {
           };
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
+          // ~800 kbps: poupa dados dos espectadores e o limite gratuito do TURN.
+          pc.getSenders().forEach((sd) => {
+            if (sd.track?.kind !== "video") return;
+            const params = sd.getParameters();
+            if (!params.encodings?.length) return;
+            params.encodings[0].maxBitrate = 800_000;
+            sd.setParameters(params).catch(() => {});
+          });
           send({ type: "offer", to: s.from, sdp: pc.localDescription! });
         } else if (s.type === "answer") {
           const pc = peers.current.get(s.from);
@@ -185,24 +225,35 @@ export function useBroadcaster(room: string) {
 export function useViewer(room: string) {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState("A preparar…");
 
   useEffect(() => {
     const id = crypto.randomUUID();
+    let retry: ReturnType<typeof setInterval> | undefined;
+    let gotOffer = false;
     let pc: RTCPeerConnection | null = null;
     let link: Link | undefined;
     let cancelled = false;
 
     (async () => {
       try {
+        const cfg = await prepare();
         const l = await openChannel(room, "viewer", async (s) => {
-          if (s.type === "broadcaster-ready") return l.send({ type: "viewer-join", from: id });
-          if (s.type === "broadcaster-stop") { pc?.close(); pc = null; setStream(null); return; }
+          if (s.type === "broadcaster-ready") { gotOffer = false; setStatus("A pedir a transmissão…"); return l.send({ type: "viewer-join", from: id }); }
+          if (s.type === "broadcaster-stop") { pc?.close(); pc = null; setStream(null); setStatus("Transmissão terminada."); return; }
           if (!("to" in s) || s.to !== id) return;
 
           if (s.type === "offer") {
             pc?.close();
-            const conn = (pc = new RTCPeerConnection(RTC_CONFIG));
-            conn.ontrack = (e) => setStream(e.streams[0]);
+            gotOffer = true;
+            setStatus("A negociar a ligação de vídeo…");
+            const conn = (pc = new RTCPeerConnection(cfg));
+            conn.ontrack = (e) => { setStream(e.streams[0]); setStatus("Ligado"); };
+            conn.onconnectionstatechange = () => {
+              if (conn.connectionState === "failed")
+                setStatus("A rede bloqueou a ligação direta. É preciso um servidor TURN (ver README).");
+              else if (conn.connectionState === "connected") setStatus("Ligado");
+            };
             conn.onicecandidate = (e) =>
               e.candidate && l.send({ type: "ice", to: "host" as any, from: id, candidate: e.candidate.toJSON() });
             await conn.setRemoteDescription(s.sdp);
@@ -216,7 +267,14 @@ export function useViewer(room: string) {
         });
         if (cancelled) return l.close();
         link = l;
+        setStatus("A pedir a transmissão…");
         l.send({ type: "viewer-join", from: id });
+        // Se o transmissor não responder (mensagem perdida / ainda a arrancar), repete o pedido.
+        retry = setInterval(() => {
+          if (gotOffer) return;
+          setStatus("A aguardar o transmissor…");
+          l.send({ type: "viewer-join", from: id });
+        }, 6000);
       } catch (e: any) {
         if (!cancelled) setError(e?.message ?? "Erro ao ligar à transmissão.");
       }
@@ -224,13 +282,14 @@ export function useViewer(room: string) {
 
     return () => {
       cancelled = true;
+      clearInterval(retry);
       link?.send({ type: "viewer-leave", from: id });
       link?.close();
       pc?.close();
     };
   }, [room]);
 
-  return { stream, error };
+  return { stream, error, status };
 }
 
 /** Badge "AO VIVO": lê live_sessions e acompanha alterações em tempo real. */

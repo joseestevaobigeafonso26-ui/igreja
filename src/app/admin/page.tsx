@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useState } from "react";
 import TableEditor, { type Field } from "@/components/TableEditor";
 import UsersManager from "@/components/UsersManager";
+import RemoteCamera from "@/components/RemoteCamera";
 import { useRole } from "@/lib/auth";
 
 const T: Record<string, { label: string; fields: Field[]; orderBy?: string }> = {
@@ -60,6 +61,8 @@ export default function Admin() {
     <>
       <h1 className="text-xl font-bold">Administração de conteúdo</h1>
       <div className="flex flex-wrap gap-2">
+        <button onClick={() => setTab("camera")}
+          className={`rounded-lg px-3 py-2 text-sm ${tab === "camera" ? "bg-brand-terracotta font-semibold text-white" : "bg-white"}`}>Câmara remota</button>
         {canManageUsers && (
           <button onClick={() => setTab("users")}
             className={`rounded-lg px-3 py-2 text-sm ${tab === "users" ? "bg-brand-terracotta font-semibold text-white" : "bg-white"}`}>Utilizadores</button>
@@ -69,7 +72,7 @@ export default function Admin() {
             className={`rounded-lg px-3 py-2 text-sm ${tab === k ? "bg-brand-terracotta font-semibold text-white" : "bg-white"}`}>{v.label}</button>
         ))}
       </div>
-      {tab === "users" && canManageUsers ? <UsersManager /> : <TableEditor key={tab} table={tab} fields={t.fields} orderBy={t.orderBy} />}
+      {tab === "camera" ? <RemoteCamera /> : tab === "users" && canManageUsers ? <UsersManager /> : <TableEditor key={tab} table={tab} fields={t.fields} orderBy={t.orderBy} />}
     </>
   );
 }
