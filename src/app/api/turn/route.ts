@@ -6,16 +6,33 @@ export const dynamic = "force-dynamic";
 // Guarda as credenciais temporárias em memória (6 h; o TTL pedido à Cloudflare é 24 h).
 let cache: { servers: unknown[]; exp: number } | null = null;
 
-/** Devolve servidores TURN (Metered ou Cloudflare) sem expor chaves ao navegador. Só para quem tem sessão (inclui anónimos). */
+// Limite simples por IP (em memória): evita que alguém esgote a quota gratuita do TURN.
+const hits = new Map<string, { n: number; reset: number }>();
+function limited(ip: string) {
+  const now = Date.now();
+  const h = hits.get(ip);
+  if (!h || h.reset < now) { hits.set(ip, { n: 1, reset: now + 60_000 }); return false; }
+  h.n += 1;
+  return h.n > 20;
+}
+
+/**
+ * Devolve servidores TURN (Metered ou Cloudflare) sem expor chaves ao navegador.
+ * Não exige conta (os espectadores são visitantes), mas só responde enquanto houver
+ * uma transmissão ao vivo e com limite de pedidos por IP.
+ */
 export async function GET(req: NextRequest) {
-  const token = req.headers.get("authorization")?.replace("Bearer ", "");
-  if (!token) return NextResponse.json({ error: "Sem sessão." }, { status: 401 });
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "?";
+  if (limited(ip)) return NextResponse.json({ iceServers: [], error: "Muitos pedidos." }, { status: 429 });
 
   const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
     auth: { persistSession: false },
   });
-  const { data: { user } } = await sb.auth.getUser(token);
-  if (!user) return NextResponse.json({ error: "Sessão inválida." }, { status: 401 });
+  const { data: lives } = await sb.from("live_sessions").select("room").eq("is_live", true).limit(1);
+  const token = req.headers.get("authorization")?.replace("Bearer ", "");
+  let isUser = false;
+  if (token) { const { data: { user } } = await sb.auth.getUser(token); isUser = !!user; }
+  if (!lives?.length && !isUser) return NextResponse.json({ iceServers: [] }); // nada ao vivo: sem TURN
 
   // Metered Open Relay (20 GB/mês grátis): a API devolve diretamente a lista iceServers.
   const meteredApp = process.env.METERED_APP_NAME;

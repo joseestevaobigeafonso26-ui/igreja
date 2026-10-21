@@ -3,7 +3,7 @@
 Next.js (App Router) + React + Tailwind + Supabase + WebRTC.
 
 ## Arrancar
-1. Crie um projeto no Supabase e execute `supabase/schema.sql` depois `schema_v2.sql`, `schema_v3.sql`, `schema_v4.sql`, `schema_v5.sql` e `schema_v6.sql` no SQL Editor.
+1. Crie um projeto no Supabase e execute `supabase/schema.sql` depois `schema_v2.sql`, `schema_v3.sql`, `schema_v4.sql`, `schema_v5.sql`, `schema_v6.sql` e `schema_v7.sql` no SQL Editor.
 2. Em Authentication → Sign In / Providers, ative **Allow anonymous sign-ins** (os espectadores entram assim, sem criar conta).
 2. `cp .env.example .env.local` e preencha URL e chave anon (Settings → API).
 3. Primeiro acesso do pastor: Supabase → Authentication → Users → Add user → Create new user (email + senha, marque *Auto Confirm User*). Depois, no SQL Editor: `update profiles set role = 'pastor' where id = (select id from auth.users where email = 'EMAIL_DO_PASTOR');`
@@ -42,3 +42,10 @@ No SQL Editor do Supabase, confirme que as regras existem:
 `select policyname, cmd, roles from pg_policies where schemaname = 'realtime' and tablename = 'messages';`
 Devem aparecer 5 linhas com "live": `live host: todos recebem`, `live host: so equipa envia`, `live viewers: todos enviam`,
 `live viewers: so equipa recebe` e `live cam: so equipa recebe`. Se faltar alguma, execute o schema_v4/v5 correspondente.
+
+## Espectadores sem conta (como funciona)
+As salas públicas (culto, discipulado, teologia, agenda) usam um canal Realtime público: o visitante **não precisa de conta nem de login anónimo**.
+A segurança é por assinatura digital: a cada transmissão a equipa cria uma chave (a pública fica em `live_sessions.pubkey`) e assina cada oferta de vídeo;
+os espectadores só aceitam ofertas com assinatura válida, por isso ninguém consegue injetar vídeo falso.
+Limites: o canal é público, então outros visitantes técnicos podem ver os dados de ligação (inclui IP) trocados no canal; um abusador pode ocupar vagas
+(teto de 40 espectadores) mas não consegue trocar o vídeo. As salas `cam-*` (câmara remota) continuam privadas, só para a equipa.

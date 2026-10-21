@@ -20,14 +20,14 @@ if (process.env.NEXT_PUBLIC_TURN_URL) {
   });
 }
 
-// Credenciais TURN temporárias vêm de /api/turn (Cloudflare). Guardadas 1 h no navegador.
+// Credenciais TURN vêm de /api/turn (servidor). Qualquer visitante pode pedir (sem sessão); guardadas 1 h.
 let cachedCfg: { cfg: RTCConfiguration; at: number } | null = null;
 async function rtcConfig(): Promise<RTCConfiguration> {
   if (cachedCfg && Date.now() - cachedCfg.at < 3600_000) return cachedCfg.cfg;
   let extra: RTCIceServer[] = [];
   try {
     const { data } = await supabase.auth.getSession();
-    const res = await fetch("/api/turn", { headers: { Authorization: `Bearer ${data.session?.access_token}` } });
+    const res = await fetch("/api/turn", data.session ? { headers: { Authorization: `Bearer ${data.session.access_token}` } } : undefined);
     if (res.ok) {
       const j = await res.json();
       if (Array.isArray(j.iceServers)) extra = j.iceServers;
@@ -37,20 +37,46 @@ async function rtcConfig(): Promise<RTCConfiguration> {
   if (extra.length) cachedCfg = { cfg, at: Date.now() }; // só guarda se o TURN respondeu
   return cfg;
 }
-/** Sessão + configuração ICE prontas ANTES de abrir canais (evita perder candidatos ICE). */
-async function prepare() {
-  await ensureSession();
+/** Salas "cam-*" (câmara remota) são privadas: exigem sessão. As públicas não exigem nada. */
+const isCam = (room: string) => room.startsWith("cam-");
+async function prepare(room: string) {
+  if (isCam(room)) await ensureSession();
   return rtcConfig();
+}
+
+// ── Assinatura das ofertas: só quem tem a chave privada da transmissão (a equipa) consegue
+// gerar ofertas que os espectadores aceitam. A chave pública fica em live_sessions.pubkey.
+const enc = new TextEncoder();
+const b64 = (buf: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+const unb64 = (str: string) => Uint8Array.from(atob(str), (c) => c.charCodeAt(0));
+const offerMsg = (to: string, sdp: string) => `offer|${to}|${sdp}`;
+type Signer = { pub: JsonWebKey; sign: (m: string) => Promise<string> };
+async function newSigner(): Promise<Signer> {
+  const kp = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign", "verify"]);
+  const pub = await crypto.subtle.exportKey("jwk", kp.publicKey);
+  return { pub, sign: async (m) => b64(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, kp.privateKey, enc.encode(m))) };
+}
+async function fetchRoomKey(room: string): Promise<CryptoKey | null> {
+  const { data } = await supabase.from("live_sessions").select("pubkey").eq("room", room).single();
+  if (!data?.pubkey) return null;
+  try {
+    return await crypto.subtle.importKey("jwk", data.pubkey, { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
+  } catch { return null; }
+}
+async function verifySig(key: CryptoKey | null, msg: string, sig?: string) {
+  if (!key || !sig) return false;
+  try { return await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, key, unb64(sig), enc.encode(msg)); }
+  catch { return false; }
 }
 
 type Signal =
   | { type: "viewer-join"; from: string }
   | { type: "viewer-leave"; from: string }
-  | { type: "offer"; to: string; sdp: RTCSessionDescriptionInit }
+  | { type: "offer"; to: string; sdp: RTCSessionDescriptionInit; sig?: string }
   | { type: "answer"; to: "host"; from: string; sdp: RTCSessionDescriptionInit }
   | { type: "ice"; to: string; from: string; candidate: RTCIceCandidateInit }
   | { type: "broadcaster-ready" }
-  | { type: "broadcaster-stop" };
+  | { type: "broadcaster-stop"; sig?: string };
 
 // Candidatos ICE que chegam antes da descrição remota ficam em fila.
 const queues = new WeakMap<RTCPeerConnection, RTCIceCandidateInit[]>();
@@ -119,6 +145,24 @@ async function openChannel(room: string, side: "host" | "viewer", onSignal: (s: 
   };
 }
 
+/** Canal PÚBLICO (sem sessão): qualquer visitante liga. A segurança vem da assinatura das ofertas. */
+async function openPublicChannel(room: string, onSignal: (s: Signal) => void): Promise<Link> {
+  supabase.getChannels().filter((c) => c.topic === `realtime:pub:${room}`).forEach((c) => supabase.removeChannel(c));
+  const ch = supabase.channel(`pub:${room}`, { config: { broadcast: { self: false } } });
+  ch.on("broadcast", { event: "signal" }, ({ payload }) => onSignal(payload as Signal));
+  await new Promise<void>((res, rej) =>
+    ch.subscribe((st, err) => {
+      if (st === "SUBSCRIBED") res();
+      else if (st === "CHANNEL_ERROR" || st === "TIMED_OUT")
+        rej(new Error(`Falha ao ligar ao canal da transmissão (${err?.message ?? st}).`));
+    })
+  );
+  return {
+    send: (payload) => { ch.send({ type: "broadcast", event: "signal", payload }); },
+    close: () => { supabase.removeChannel(ch); },
+  };
+}
+
 export type Source = "tela" | "camera";
 
 /* ───────────── Transmissor (pastor / professor) ───────────── */
@@ -130,9 +174,12 @@ export function useBroadcaster(room: string) {
   const chRef = useRef<Link | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const externalRef = useRef(false); // true quando a fonte é um stream recebido (câmara remota)
+  const signerRef = useRef<Signer | null>(null);
 
   const stop = useCallback(async () => {
-    chRef.current?.send({ type: "broadcaster-stop" });
+    const sig = signerRef.current ? await signerRef.current.sign("stop") : undefined;
+    chRef.current?.send({ type: "broadcaster-stop", sig });
+    signerRef.current = null;
     peers.current.forEach((pc) => pc.close());
     peers.current.clear();
     if (!externalRef.current) streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -142,7 +189,7 @@ export function useBroadcaster(room: string) {
     chRef.current = null;
     setStream(null);
     setViewers(0);
-    await supabase.from("live_sessions").update({ is_live: false }).eq("room", room);
+    await supabase.from("live_sessions").update({ is_live: false, pubkey: null }).eq("room", room);
   }, [room]);
 
   const start = useCallback(async (source: Source | MediaStream) => {
@@ -174,10 +221,16 @@ export function useBroadcaster(room: string) {
       const vt = media.getVideoTracks()[0];
       if (vt) vt.onended = () => stop(); // botão "Parar partilha" do navegador
 
-      const cfg = await prepare();
+      const cfg = await prepare(room);
+      if (!isCam(room)) {
+        const signer = await newSigner();
+        const { error: e1 } = await supabase.from("live_sessions").update({ pubkey: signer.pub }).eq("room", room);
+        if (e1) throw new Error(`Não foi possível registar a chave da transmissão — execute o schema_v7.sql no Supabase. (${e1.message})`);
+        signerRef.current = signer;
+      }
       let link: Link | undefined;
       const send = (p: Signal) => link?.send(p);
-      link = await openChannel(room, "host", async (s) => {
+      const onSignal = async (s: Signal) => {
         if (s.type === "viewer-join") {
           if (!peers.current.has(s.from) && peers.current.size >= MAX_VIEWERS) return;
           peers.current.get(s.from)?.close();
@@ -203,7 +256,9 @@ export function useBroadcaster(room: string) {
             params.encodings[0].maxBitrate = 800_000;
             sd.setParameters(params).catch(() => {});
           });
-          send({ type: "offer", to: s.from, sdp: pc.localDescription! });
+          const local = pc.localDescription!;
+          const sig = signerRef.current ? await signerRef.current.sign(offerMsg(s.from, local.sdp)) : undefined;
+          send({ type: "offer", to: s.from, sdp: local, sig });
         } else if (s.type === "answer") {
           const pc = peers.current.get(s.from);
           if (pc) { await pc.setRemoteDescription(s.sdp); await flushIce(pc); }
@@ -215,7 +270,8 @@ export function useBroadcaster(room: string) {
           peers.current.delete(s.from);
           setViewers(peers.current.size);
         }
-      });
+      };
+      link = isCam(room) ? await openChannel(room, "host", onSignal) : await openPublicChannel(room, onSignal);
       chRef.current = link;
       await supabase.from("live_sessions").update({ is_live: true, started_at: new Date().toISOString() }).eq("room", room);
       send({ type: "broadcaster-ready" }); // espectadores já na página reconectam
@@ -230,7 +286,7 @@ export function useBroadcaster(room: string) {
   return { stream, viewers, error, start, stop };
 }
 
-/* ───────────── Espectador (qualquer pessoa) ───────────── */
+/* ───────────── Espectador (qualquer pessoa, sem conta) ───────────── */
 export function useViewer(room: string) {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -238,21 +294,38 @@ export function useViewer(room: string) {
 
   useEffect(() => {
     const id = crypto.randomUUID();
+    const cam = isCam(room);
     let retry: ReturnType<typeof setInterval> | undefined;
     let gotOffer = false;
     let pc: RTCPeerConnection | null = null;
     let link: Link | undefined;
     let cancelled = false;
+    let hostKey: CryptoKey | null = null;
+    let earlyIce: RTCIceCandidateInit[] = []; // ICE que chega enquanto a oferta ainda é verificada
 
     (async () => {
       try {
-        const cfg = await prepare();
-        const l = await openChannel(room, "viewer", async (s) => {
-          if (s.type === "broadcaster-ready") { gotOffer = false; setStatus("A pedir a transmissão…"); return l.send({ type: "viewer-join", from: id }); }
-          if (s.type === "broadcaster-stop") { pc?.close(); pc = null; setStream(null); setStatus("Transmissão terminada."); return; }
+        const cfg = await prepare(room);
+        if (!cam) hostKey = await fetchRoomKey(room);
+        const onSignal = async (s: Signal) => {
+          if (s.type === "broadcaster-ready") {
+            if (!cam) hostKey = await fetchRoomKey(room);
+            gotOffer = false; setStatus("A pedir a transmissão…");
+            return l.send({ type: "viewer-join", from: id });
+          }
+          if (s.type === "broadcaster-stop") {
+            if (!cam && !(await verifySig(hostKey, "stop", s.sig))) return; // ignora "stop" forjado
+            pc?.close(); pc = null; setStream(null); setStatus("Transmissão terminada."); return;
+          }
           if (!("to" in s) || s.to !== id) return;
 
           if (s.type === "offer") {
+            if (!cam) {
+              const msg = offerMsg(id, s.sdp.sdp ?? "");
+              let ok = await verifySig(hostKey, msg, s.sig);
+              if (!ok) { hostKey = await fetchRoomKey(room); ok = await verifySig(hostKey, msg, s.sig); }
+              if (!ok) return; // oferta não assinada pela equipa: ignorada
+            }
             pc?.close();
             gotOffer = true;
             setStatus("A negociar a ligação de vídeo…");
@@ -266,14 +339,16 @@ export function useViewer(room: string) {
             conn.onicecandidate = (e) =>
               e.candidate && l.send({ type: "ice", to: "host" as any, from: id, candidate: e.candidate.toJSON() });
             await conn.setRemoteDescription(s.sdp);
+            earlyIce.forEach((c) => addIce(conn, c)); earlyIce = [];
             await flushIce(conn);
             const answer = await conn.createAnswer();
             await conn.setLocalDescription(answer);
             l.send({ type: "answer", to: "host", from: id, sdp: conn.localDescription! });
-          } else if (s.type === "ice" && pc) {
-            await addIce(pc, s.candidate);
+          } else if (s.type === "ice") {
+            if (pc) await addIce(pc, s.candidate); else earlyIce.push(s.candidate);
           }
-        });
+        };
+        const l: Link = cam ? await openChannel(room, "viewer", onSignal) : await openPublicChannel(room, onSignal);
         if (cancelled) return l.close();
         link = l;
         setStatus("A pedir a transmissão…");
