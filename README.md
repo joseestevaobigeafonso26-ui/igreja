@@ -57,3 +57,8 @@ Enquanto uma sala está ao vivo aparece, por baixo do vídeo, o painel de intera
 - **Culto e agenda** (modo simples): reações e comentários.
 - **Discipulado e teologia** (modo interativo): além disso, "✋ pergunta ao responsável", lista de participantes e, para a equipa, fixar mensagem, marcar pergunta como respondida e apagar.
 O servidor decide o selo de cada mensagem (Responsável / Membro / visitante); ninguém consegue fingir ser o responsável.
+
+## O responsável vê reações e comentários a passar
+- **Sobre o vídeo:** na pré-visualização do responsável, as reações sobem e os últimos comentários aparecem por cima da imagem (somem após 15 s).
+- **Painel noutra janela/ecrã:** botão "Abrir painel de comentários" (ou `/painel/culto`, `/painel/discipulado`…, só equipa) com a lista grande, reações, fixar/responder/apagar. Ideal num segundo monitor, tablet ou telemóvel.
+- Atenção: se o responsável partilhar o **ecrã inteiro**, a página com a camada de comentários pode aparecer na transmissão. Prefira partilhar uma **janela ou aba** (ex.: os slides) e ver os comentários noutra janela, ou use o painel noutro aparelho.
