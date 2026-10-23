@@ -3,7 +3,7 @@
 Next.js (App Router) + React + Tailwind + Supabase + WebRTC.
 
 ## Arrancar
-1. Crie um projeto no Supabase e execute `supabase/schema.sql` depois `schema_v2.sql`, `schema_v3.sql`, `schema_v4.sql`, `schema_v5.sql`, `schema_v6.sql`, `schema_v7.sql`, `schema_v8.sql`, `schema_v9.sql` e `schema_v10.sql` no SQL Editor.
+1. Crie um projeto no Supabase e execute `supabase/schema.sql` depois `schema_v2.sql`, `schema_v3.sql`, `schema_v4.sql`, `schema_v5.sql`, `schema_v6.sql`, `schema_v7.sql`, `schema_v8.sql`, `schema_v9.sql`, `schema_v10.sql` e `schema_v11.sql` (aulas com cadeiras) no SQL Editor.
 2. Em Authentication → Sign In / Providers, ative **Allow anonymous sign-ins** (os espectadores entram assim, sem criar conta).
 2. `cp .env.example .env.local` e preencha URL e chave anon (Settings → API).
 3. Primeiro acesso do pastor: Supabase → Authentication → Users → Add user → Create new user (email + senha, marque *Auto Confirm User*). Depois, no SQL Editor: `update profiles set role = 'pastor' where id = (select id from auth.users where email = 'EMAIL_DO_PASTOR');`
@@ -18,7 +18,7 @@ Next.js (App Router) + React + Tailwind + Supabase + WebRTC.
 - Conteúdo (avisos, agenda, cursos, lições, liderança, ministérios, galeria): edite em **/admin** (só equipa). Fotos enviadas por membros ficam pendentes até a equipa marcar "Aprovada?" na aba Galeria.
 
 ## Limites a conhecer
-- Malha 1→N: bom até algumas dezenas de espectadores. Acima disso use um SFU (LiveKit/mediasoup).
+- Malha 1→N: bom até algumas dezenas de espectadores. Acima disso seria preciso um servidor de vídeo (SFU).
 - Em 4G/redes restritas é preciso servidor TURN (variáveis `NEXT_PUBLIC_TURN_*`).
 - Partilha de ecrã não existe em navegadores móveis → no telemóvel use a opção **Câmara**.
 - Segurança: a sinalização usa canais privados (`schema_v4.sql`). Só a equipa envia ofertas de vídeo; espectadores anónimos só conseguem assistir. Limites: há um teto de 40 espectadores por transmissor, e o Supabase limita inícios de sessão anónima por IP (confirme em Authentication → Rate Limits) — uma igreja inteira na mesma rede Wi-Fi pode precisar de um limite maior.
@@ -72,10 +72,23 @@ Opcional. Em **/admin → Banner ao vivo** (ou no painel de transmissão) escrev
 É uma camada do site (não vai nos pixels do vídeo, por isso não aparece em gravações da transmissão).
 
 ## Aulas privadas com cadeiras (discipulado e teologia)
-- Só entram **alunos inscritos** numa sala pelo administrador (**/admin → Salas de aula**), com email e senha. Visitantes anónimos não entram.
-- Servidor de vídeo: **LiveKit Cloud** (plano grátis, sem cartão: 5.000 minutos de participação/mês, 50 GB, até 100 pessoas ao mesmo tempo; sem sobretaxa no plano grátis — ao esgotar, as aulas param até ao mês seguinte ou até subir de plano).
-  Defina `LIVEKIT_URL`, `LIVEKIT_API_KEY` e `LIVEKIT_API_SECRET` no Vercel (sem `NEXT_PUBLIC_`).
-- O responsável define quantas **cadeiras** (0 a 8) e se aprova cada pedido ou é livre. Quem senta decide, por si, ligar ou desligar câmara e microfone.
-- Só se gasta tempo da quota quando alguém **clica "Entrar na aula"**.
-- Chat, perguntas e reações da turma viajam pela própria sala (privados, não ficam guardados).
+Sem servidor de vídeo e sem contas em serviços de fora: só Supabase + Vercel (e o TURN que já usa nas transmissões).
+
+**Como funciona.** O computador do professor faz de ponte.
+- Cada aluno liga-se ao professor e recebe dele a imagem e o som da aula.
+- O aluno que recebe a palavra (**cadeira**) envia a sua câmara e microfone ao professor, e o professor reencaminha-os a toda a turma. Quem fala nunca recebe de volta a sua própria imagem (sem eco).
+- Pelo Supabase passa **só texto** (sinalização, chat, reações). O vídeo vai direto entre navegadores.
+- Só entram **alunos inscritos** numa sala (**/admin → Salas de aula**) com email e senha. Visitantes anónimos não entram.
+- O professor define de 0 a 4 cadeiras e se aprova cada pedido (✋) ou é livre. Pode silenciar quem fala, retirar a palavra, remover um aluno e partilhar o ecrã. Quem tem a palavra decide, por si, ligar câmara e/ou microfone.
+- Se a rede de um aluno cair, ele volta a ligar sozinho; se estava numa cadeira, mantém-na durante 1 minuto.
+
+**Limites (importante).**
+- Tudo passa pelo **upload do professor**. Cada aluno ligado custa uma cópia da imagem dele, mais uma por cada cadeira em uso. O motor divide o orçamento de envio (escolhido no ecrã: 2, 5 ou 10 Mbps) pelos alunos ligados, por isso **quanto mais alunos, menor a qualidade**.
+- Teto: **15 alunos ligados** e **4 cadeiras** (`MAX_ALUNOS` e `MAX_SEATS` em `src/lib/aula/protocol.ts`). Para turmas de discipulado (até ~10) serve bem com 5 Mbps de envio; acima disso seria preciso um servidor de vídeo.
+- O professor deve usar **computador com cabo ou Wi-Fi forte**, **fones**, e manter o separador **aberto e visível** durante a aula (o navegador abranda separadores escondidos). Se o professor fechar o separador, a aula termina para todos.
+- Em redes móveis/restritas é preciso TURN (ver abaixo); o vídeo de cada cadeira passa pelo TURN duas vezes (aluno→professor e professor→turma).
+- Segurança: canais privados (`schema_v11.sql`). Só o professor da sala escreve no canal da turma; cada aluno só escreve no seu canal (o nome do canal leva o seu uid e a regra obriga uid = utilizador), por isso ninguém finge ser outro aluno, e o professor vê o nome do cadastro, não o que o aluno escrever.
+- Chat, perguntas e reações da turma não ficam guardados.
 - O culto e a agenda continuam abertos ao público, no sistema anterior.
+
+**Testar o motor** (professor + 3 alunos com vídeo real num Chromium de teste): ver `tools/aula-test/`.

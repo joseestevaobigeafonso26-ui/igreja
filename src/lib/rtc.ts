@@ -2,7 +2,7 @@
 /**
  * WebRTC com sinalização via Supabase Realtime (canal broadcast "live:<sala>").
  * Topologia: o transmissor abre uma RTCPeerConnection por espectador (malha 1→N).
- * Funciona bem para dezenas de espectadores; para centenas, troque por um SFU (ex.: LiveKit).
+ * Funciona bem para dezenas de espectadores; para centenas seria preciso um SFU (servidor de vídeo). Aulas com cadeiras: ver src/lib/aula.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -22,7 +22,7 @@ if (process.env.NEXT_PUBLIC_TURN_URL) {
 
 // Credenciais TURN vêm de /api/turn (servidor). Qualquer visitante pode pedir (sem sessão); guardadas 1 h.
 let cachedCfg: { cfg: RTCConfiguration; at: number } | null = null;
-async function rtcConfig(): Promise<RTCConfiguration> {
+export async function rtcConfig(): Promise<RTCConfiguration> {
   if (cachedCfg && Date.now() - cachedCfg.at < 3600_000) return cachedCfg.cfg;
   let extra: RTCIceServer[] = [];
   try {

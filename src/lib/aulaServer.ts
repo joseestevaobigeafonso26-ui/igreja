@@ -1,18 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
-import { RoomServiceClient } from "livekit-server-sdk";
 import type { NextRequest } from "next/server";
 
 export function adminDb() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
-}
-
-export function livekit() {
-  const url = process.env.LIVEKIT_URL, key = process.env.LIVEKIT_API_KEY, secret = process.env.LIVEKIT_API_SECRET;
-  if (!url || !key || !secret) throw new Error("LiveKit não configurado no servidor (LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET).");
-  const http = url.replace(/^wss:/, "https:").replace(/^ws:/, "http:");
-  return { url, key, secret, svc: new RoomServiceClient(http, key, secret) };
 }
 
 /** Quem está a pedir e que papel tem nesta sala. null = sem acesso (visitantes anónimos nunca entram). */
