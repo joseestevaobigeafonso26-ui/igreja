@@ -5,6 +5,7 @@ import TableEditor, { type Field } from "@/components/TableEditor";
 import UsersManager from "@/components/UsersManager";
 import RemoteCamera from "@/components/RemoteCamera";
 import BannerEditor from "@/components/BannerEditor";
+import SalasManager from "@/components/SalasManager";
 import { useRole } from "@/lib/auth";
 
 const T: Record<string, { label: string; fields: Field[]; orderBy?: string }> = {
@@ -52,7 +53,7 @@ const T: Record<string, { label: string; fields: Field[]; orderBy?: string }> = 
 };
 
 function BannerPanel() {
-  const rooms = [["culto", "Culto"], ["discipulado", "Discipulado"], ["teologia", "Teologia"], ["agenda", "Agenda"]];
+  const rooms = [["culto", "Culto"], ["agenda", "Agenda"]];
   const [room, setRoom] = useState("culto");
   return (
     <div className="max-w-2xl space-y-3">
@@ -84,6 +85,10 @@ export default function Admin() {
         <button onClick={() => setTab("camera")}
           className={`rounded-lg px-3 py-2 text-sm ${tab === "camera" ? "bg-brand-terracotta font-semibold text-white" : "bg-white"}`}>Câmara remota</button>
         {canManageUsers && (
+          <button onClick={() => setTab("salas")}
+            className={`rounded-lg px-3 py-2 text-sm ${tab === "salas" ? "bg-brand-terracotta font-semibold text-white" : "bg-white"}`}>Salas de aula</button>
+        )}
+        {canManageUsers && (
           <button onClick={() => setTab("users")}
             className={`rounded-lg px-3 py-2 text-sm ${tab === "users" ? "bg-brand-terracotta font-semibold text-white" : "bg-white"}`}>Utilizadores</button>
         )}
@@ -92,7 +97,7 @@ export default function Admin() {
             className={`rounded-lg px-3 py-2 text-sm ${tab === k ? "bg-brand-terracotta font-semibold text-white" : "bg-white"}`}>{v.label}</button>
         ))}
       </div>
-      {tab === "banner" ? <BannerPanel /> : tab === "camera" ? <RemoteCamera /> : tab === "users" && canManageUsers ? <UsersManager /> : <TableEditor key={tab} table={tab} fields={t.fields} orderBy={t.orderBy} />}
+      {tab === "salas" && canManageUsers ? <SalasManager /> : tab === "banner" ? <BannerPanel /> : tab === "camera" ? <RemoteCamera /> : tab === "users" && canManageUsers ? <UsersManager /> : <TableEditor key={tab} table={tab} fields={t.fields} orderBy={t.orderBy} />}
     </>
   );
 }

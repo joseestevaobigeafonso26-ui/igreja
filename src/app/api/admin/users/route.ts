@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     if (error || !data.user) return fail(error?.message ?? "Erro ao criar utilizador.");
     // O trigger já criou o perfil; aqui definimos nome e papel.
     await a.admin.from("profiles").upsert({ id: data.user.id, nome: nome || String(email).split("@")[0], role, ativo: true });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, id: data.user.id });
   } catch (e: any) { return fail(e.message, 500); }
 }
 

@@ -7,8 +7,6 @@ import { useRole } from "@/lib/auth";
 
 const ROOMS: Record<string, { titulo: string; mode: "simples" | "interativo" }> = {
   culto: { titulo: "Culto ao vivo", mode: "simples" },
-  discipulado: { titulo: "Discipulado", mode: "interativo" },
-  teologia: { titulo: "Teologia", mode: "interativo" },
   agenda: { titulo: "Agenda / informações", mode: "simples" },
 };
 

@@ -1,5 +1,5 @@
+import AulaPanel from "@/components/AulaPanel";
 import CourseList from "@/components/CourseList";
-import LiveRoom from "@/components/LiveRoom";
 import { getCourses } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,7 @@ export default async function Page() {
         <p className="text-sm text-slate-500">Trilhas de formação 1-para-1 e vida cristã prática.</p>
       </div>
       <div className="grid gap-6 lg:grid-cols-2">
-        <LiveRoom mode="interativo" room="discipulado" title="Aula de discipulado ao vivo" />
+        <AulaPanel area="discipulado" />
         <CourseList courses={courses} />
       </div>
     </>

@@ -5,8 +5,6 @@ import { Video } from "@/components/LiveRoom";
 
 const ROOMS = [
   { id: "culto", label: "Culto ao vivo" },
-  { id: "discipulado", label: "Discipulado" },
-  { id: "teologia", label: "Teologia" },
   { id: "agenda", label: "Agenda / informações" },
 ];
 

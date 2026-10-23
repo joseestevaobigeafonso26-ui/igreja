@@ -3,7 +3,7 @@
 Next.js (App Router) + React + Tailwind + Supabase + WebRTC.
 
 ## Arrancar
-1. Crie um projeto no Supabase e execute `supabase/schema.sql` depois `schema_v2.sql`, `schema_v3.sql`, `schema_v4.sql`, `schema_v5.sql`, `schema_v6.sql`, `schema_v7.sql`, `schema_v8.sql` e `schema_v9.sql` no SQL Editor.
+1. Crie um projeto no Supabase e execute `supabase/schema.sql` depois `schema_v2.sql`, `schema_v3.sql`, `schema_v4.sql`, `schema_v5.sql`, `schema_v6.sql`, `schema_v7.sql`, `schema_v8.sql`, `schema_v9.sql` e `schema_v10.sql` no SQL Editor.
 2. Em Authentication → Sign In / Providers, ative **Allow anonymous sign-ins** (os espectadores entram assim, sem criar conta).
 2. `cp .env.example .env.local` e preencha URL e chave anon (Settings → API).
 3. Primeiro acesso do pastor: Supabase → Authentication → Users → Add user → Create new user (email + senha, marque *Auto Confirm User*). Depois, no SQL Editor: `update profiles set role = 'pastor' where id = (select id from auth.users where email = 'EMAIL_DO_PASTOR');`
@@ -70,3 +70,12 @@ Limite físico: vários telemóveis a tocar o mesmo áudio com atrasos diferente
 ## Banner de informações (rodapé estilo telejornal)
 Opcional. Em **/admin → Banner ao vivo** (ou no painel de transmissão) escreva uma informação por linha; desliza no rodapé do vídeo enquanto a sala está ao vivo e atualiza em tempo real.
 É uma camada do site (não vai nos pixels do vídeo, por isso não aparece em gravações da transmissão).
+
+## Aulas privadas com cadeiras (discipulado e teologia)
+- Só entram **alunos inscritos** numa sala pelo administrador (**/admin → Salas de aula**), com email e senha. Visitantes anónimos não entram.
+- Servidor de vídeo: **LiveKit Cloud** (plano grátis, sem cartão: 5.000 minutos de participação/mês, 50 GB, até 100 pessoas ao mesmo tempo; sem sobretaxa no plano grátis — ao esgotar, as aulas param até ao mês seguinte ou até subir de plano).
+  Defina `LIVEKIT_URL`, `LIVEKIT_API_KEY` e `LIVEKIT_API_SECRET` no Vercel (sem `NEXT_PUBLIC_`).
+- O responsável define quantas **cadeiras** (0 a 8) e se aprova cada pedido ou é livre. Quem senta decide, por si, ligar ou desligar câmara e microfone.
+- Só se gasta tempo da quota quando alguém **clica "Entrar na aula"**.
+- Chat, perguntas e reações da turma viajam pela própria sala (privados, não ficam guardados).
+- O culto e a agenda continuam abertos ao público, no sistema anterior.
