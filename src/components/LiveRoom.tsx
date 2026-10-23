@@ -1,53 +1,33 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import { useBanner, useBroadcaster, useIsLive, useViewer, type Source } from "@/lib/rtc";
+import { useState } from "react";
+import { useBanner, useBroadcaster, useIsLive, useViewer, type CameraOpts, type Source } from "@/lib/rtc";
+import CameraControls from "@/components/CameraControls";
 import { useRole } from "@/lib/auth";
 import Interaction from "@/components/Interaction";
 import FeedOverlay from "@/components/FeedOverlay";
 import BannerTicker from "@/components/BannerTicker";
 import BannerEditor from "@/components/BannerEditor";
-import { useIdentity, useLiveFeed, type Feed } from "@/lib/liveFeed";
+import VideoFrame, { Video } from "@/components/VideoFrame";
 
-export function Video({ stream, muted, controls, onMutedChange }:
-  { stream: MediaStream | null; muted?: boolean; controls?: boolean; onMutedChange?: (m: boolean) => void }) {
-  const ref = useRef<HTMLVideoElement>(null);
-  useEffect(() => { if (ref.current) ref.current.srcObject = stream; }, [stream]);
-  useEffect(() => { if (ref.current) ref.current.muted = !!muted; }, [muted]);
-  return (
-    <video ref={ref} autoPlay playsInline muted={muted} controls={controls ?? !muted}
-      onVolumeChange={(e) => onMutedChange?.(e.currentTarget.muted)} className="h-full w-full object-contain" />
-  );
-}
+export { Video }; // compatibilidade: outros ficheiros importavam daqui
+import { useIdentity, useLiveFeed, type Feed } from "@/lib/liveFeed";
 
 function Viewer({ room }: { room: string }) {
   const { stream, error, status } = useViewer(room);
   const live = useIsLive(room);
   const banner = useBanner(room);
   const [som, setSom] = useState(false); // começa sem som: evita eco entre telemóveis na mesma sala
-  const box = useRef<HTMLDivElement>(null);
-
-  function fullscreen() {
-    const el = box.current as any;
-    if (el?.requestFullscreen) el.requestFullscreen();
-    else (box.current?.querySelector("video") as any)?.webkitEnterFullscreen?.(); // iPhone: só o vídeo
-  }
 
   return (
     <div className="space-y-2">
-      <div ref={box} className="relative aspect-video overflow-hidden rounded-xl bg-black">
-        {stream ? (
-          <>
-            <Video stream={stream} muted={!som} controls onMutedChange={(m) => setSom(!m)} />
-            {live && <BannerTicker texto={banner} lift={44} />}
-            <button onClick={fullscreen} title="Ecrã inteiro"
-              className="absolute right-2 top-2 rounded-lg bg-black/50 px-2 py-1 text-sm text-white">⛶</button>
-          </>
-        ) : (
-          <div className="flex h-full items-center justify-center p-6 text-center text-sm text-slate-400">
+      <VideoFrame stream={stream} muted={!som} controls onMutedChange={(m) => setSom(!m)}
+        placeholder={
+          <div className="flex aspect-video h-full w-full items-center justify-center p-6 text-center text-sm text-slate-400">
             {error ?? (live ? status : "Sem transmissão neste momento. Quando começar, o vídeo aparece aqui automaticamente.")}
           </div>
-        )}
-      </div>
+        }>
+        {live && <BannerTicker texto={banner} lift={44} />}
+      </VideoFrame>
       {stream && (
         <div className="space-y-1">
           <button onClick={() => setSom(!som)}
@@ -64,21 +44,26 @@ function Viewer({ room }: { room: string }) {
 }
 
 function Broadcaster({ room, feed }: { room: string; feed: Feed }) {
-  const { stream, viewers, error, start, stop, micOn, toggleMic } = useBroadcaster(room);
+  const { stream, viewers, error, start, stop, micOn, toggleMic, setCamera } = useBroadcaster(room);
   const banner = useBanner(room);
   const [source, setSource] = useState<Source>("tela");
+  const [cam, setCam] = useState<Required<CameraOpts>>({ orientation: "horizontal", facing: "environment" });
+  const [iniciou, setIniciou] = useState<Source>("tela"); // fonte realmente em uso
+  const usaCamara = (stream ? iniciou : source) === "camera";
+  function mudarCamara(v: Required<CameraOpts>) { setCam(v); if (stream && iniciou === "camera") setCamera(v); }
   return (
     <div className="space-y-3">
-      <div className="relative aspect-video overflow-hidden rounded-xl bg-black">
-        {stream ? <Video stream={stream} muted /> : (
-          <div className="flex h-full items-center justify-center p-6 text-center text-sm text-slate-400">
+      <VideoFrame stream={stream} muted
+        placeholder={
+          <div className="flex aspect-video h-full w-full items-center justify-center p-6 text-center text-sm text-slate-400">
             Escolha a fonte e clique em iniciar. A sua pré-visualização aparece aqui.
           </div>
-        )}
-        {stream && <FeedOverlay feed={feed} lift={!!banner} />}
-        {stream && <BannerTicker texto={banner} />}
-      </div>
+        }>
+        <FeedOverlay feed={feed} lift={!!banner} />
+        <BannerTicker texto={banner} />
+      </VideoFrame>
       {error && <p className="rounded-lg bg-red-50 p-2 text-sm text-red-700">{error}</p>}
+      {usaCamara && <CameraControls value={cam} onChange={mudarCamara} />}
       <div className="flex flex-wrap items-center gap-2">
         {!stream ? (
           <>
@@ -87,7 +72,7 @@ function Broadcaster({ room, feed }: { room: string; feed: Feed }) {
               <option value="tela">Partilhar ecrã (computador)</option>
               <option value="camera">Câmara + microfone (telemóvel/altar)</option>
             </select>
-            <button onClick={() => start(source)}
+            <button onClick={() => { setIniciou(source); start(source, cam); }}
               className="rounded-lg bg-brand-terracotta px-4 py-2 text-sm font-bold text-white hover:bg-brand-terracotta-dark">
               Iniciar transmissão
             </button>

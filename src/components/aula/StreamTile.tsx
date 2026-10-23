@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useReducer, useRef } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
+import { FullscreenButton, useFullscreen } from "@/components/VideoFrame";
 
 /** Um quadrado de vídeo (ou só áudio) com nome. Também reproduz o som do stream, a não ser que `silent`. */
 export default function StreamTile({
@@ -17,6 +18,9 @@ export default function StreamTile({
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [, bump] = useReducer((n: number) => n + 1, 0);
+  const box = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  const { isFs, toggle } = useFullscreen(box);
 
   useEffect(() => {
     const el = ref.current;
@@ -25,14 +29,24 @@ export default function StreamTile({
     if (!stream) return;
     el.play().catch(() => onBlocked?.());
     const on = () => bump();
+    const report = () => { if (el.videoWidth) setSize({ w: el.videoWidth, h: el.videoHeight }); };
     stream.addEventListener("addtrack", on);
     stream.addEventListener("removetrack", on);
-    return () => { stream.removeEventListener("addtrack", on); stream.removeEventListener("removetrack", on); };
+    el.addEventListener("loadedmetadata", report);
+    el.addEventListener("resize", report); // câmara rodada: horizontal ↔ vertical
+    report();
+    return () => {
+      stream.removeEventListener("addtrack", on); stream.removeEventListener("removetrack", on);
+      el.removeEventListener("loadedmetadata", report); el.removeEventListener("resize", report);
+    };
   }, [stream, onBlocked]);
 
   const hasVideo = !!stream && stream.getVideoTracks().some((t) => t.readyState === "live");
+  const ratio = big && size && hasVideo ? size.w / size.h : 16 / 9;
   return (
-    <div className={`relative overflow-hidden rounded-xl bg-slate-900 ${big ? "aspect-video" : "aspect-square"}`}>
+    <div ref={box}
+      className={`relative overflow-hidden rounded-xl bg-slate-900 ${big ? "fs-box mx-auto w-full" : "aspect-square"}`}
+      style={big ? { aspectRatio: String(ratio), maxHeight: "75vh", maxWidth: `${75 * ratio}vh` } : undefined}>
       <video ref={ref} autoPlay playsInline muted={silent}
         className={`h-full w-full ${big ? "object-contain" : "object-cover"} ${hasVideo ? "" : "hidden"}`}
         style={mirror ? { transform: "scaleX(-1)" } : undefined} />
@@ -43,6 +57,9 @@ export default function StreamTile({
           </span>
           {status && <span className="text-xs text-slate-400">{status}</span>}
         </div>
+      )}
+      {big && hasVideo && (
+        <FullscreenButton isFs={isFs} className="absolute right-2 top-2" onClick={() => toggle(ratio < 1 ? "portrait" : "landscape")} />
       )}
       <div className="absolute bottom-1 left-1 flex items-center gap-1 rounded bg-black/60 px-2 py-0.5 text-xs text-white">
         {mutedByHost ? "🔇 silenciado" : micOff ? "🔇" : "🎤"} {nome}

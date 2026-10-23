@@ -164,6 +164,18 @@ async function openPublicChannel(room: string, onSignal: (s: Signal) => void): P
 }
 
 export type Source = "tela" | "camera";
+export type CameraOpts = {
+  facing?: "environment" | "user";          // traseira / frontal
+  orientation?: "horizontal" | "vertical";  // imagem deitada (16:9) ou em pé (9:16)
+};
+
+/** Restrições de vídeo conforme as opções da câmara. */
+export function videoConstraints(o: CameraOpts = {}): MediaTrackConstraints {
+  const base: MediaTrackConstraints = { facingMode: o.facing ?? "environment" };
+  if (o.orientation === "vertical") return { ...base, width: { ideal: 720 }, height: { ideal: 1280 }, aspectRatio: { ideal: 9 / 16 } };
+  if (o.orientation === "horizontal") return { ...base, width: { ideal: 1280 }, height: { ideal: 720 }, aspectRatio: { ideal: 16 / 9 } };
+  return { ...base, width: { ideal: 1280 } };
+}
 
 // Microfone com cancelamento de eco, redução de ruído e ganho automático (ajuda contra retorno de som).
 const AUDIO_CONSTRAINTS: MediaTrackConstraints = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
@@ -179,6 +191,7 @@ export function useBroadcaster(room: string) {
   const streamRef = useRef<MediaStream | null>(null);
   const externalRef = useRef(false); // true quando a fonte é um stream recebido (câmara remota)
   const signerRef = useRef<Signer | null>(null);
+  const camOpts = useRef<CameraOpts>({});
 
   const stop = useCallback(async () => {
     const sig = signerRef.current ? await signerRef.current.sign("stop") : undefined;
@@ -196,7 +209,7 @@ export function useBroadcaster(room: string) {
     await supabase.from("live_sessions").update({ is_live: false, pubkey: null }).eq("room", room);
   }, [room]);
 
-  const start = useCallback(async (source: Source | MediaStream) => {
+  const start = useCallback(async (source: Source | MediaStream, opts?: CameraOpts) => {
     setError(null);
     try {
       // IMPORTANTE: isto é chamado a partir de um clique (exigência dos navegadores).
@@ -216,8 +229,9 @@ export function useBroadcaster(room: string) {
           } catch {}
         }
       } else {
+        camOpts.current = { facing: "environment", ...opts };
         media = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment", width: { ideal: 1280 } },
+          video: videoConstraints(camOpts.current),
           audio: AUDIO_CONSTRAINTS,
         });
       }
@@ -296,7 +310,54 @@ export function useBroadcaster(room: string) {
     setMicOn(!on);
   }, []);
 
-  return { stream, viewers, error, start, stop, micOn, toggleMic };
+  /**
+   * Muda a câmara com a transmissão a decorrer (horizontal/vertical, frontal/traseira).
+   * Os espectadores continuam ligados: só se troca a imagem enviada.
+   */
+  const setCamera = useCallback(async (next: CameraOpts) => {
+    const media = streamRef.current;
+    if (!media || externalRef.current) return;
+    const old = media.getVideoTracks()[0];
+    if (!old) return;
+    const prev = camOpts.current;
+    const merged: CameraOpts = { ...prev, ...next };
+    setError(null);
+    const refresh = () => setStream(new MediaStream(media.getTracks())); // força a pré-visualização a atualizar
+
+    // 1) Só mudou a orientação: tenta ajustar a câmara que já está aberta.
+    if (merged.facing === prev.facing) {
+      try {
+        await old.applyConstraints(videoConstraints(merged));
+        camOpts.current = merged;
+        refresh();
+        return;
+      } catch { /* este aparelho não deixa: reabre a câmara abaixo */ }
+    }
+
+    // 2) Reabre a câmara (obrigatório para frontal ↔ traseira) e troca a imagem em todos os espectadores.
+    old.stop(); // muitos telemóveis só abrem uma câmara de cada vez
+    const open = async (o: CameraOpts) =>
+      (await navigator.mediaDevices.getUserMedia({ video: videoConstraints(o) })).getVideoTracks()[0];
+    let track: MediaStreamTrack;
+    let used = merged;
+    try {
+      track = await open(merged);
+    } catch {
+      try { track = await open(prev); used = prev; }
+      catch (e: any) { setError("Não foi possível reabrir a câmara. Termine e inicie de novo."); return; }
+      setError("Este aparelho não permitiu essa mudança de câmara.");
+    }
+    camOpts.current = used;
+    media.removeTrack(old);
+    media.addTrack(track);
+    track.onended = () => stop();
+    peers.current.forEach((pc) => {
+      pc.getSenders().find((sd) => sd.track?.kind === "video")?.replaceTrack(track).catch(() => {});
+    });
+    refresh();
+  }, [stop]);
+
+  return { stream, viewers, error, start, stop, micOn, toggleMic, setCamera };
 }
 
 /* ───────────── Espectador (qualquer pessoa, sem conta) ───────────── */

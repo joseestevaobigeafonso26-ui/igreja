@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useBroadcaster, useViewer } from "@/lib/rtc";
-import { Video } from "@/components/LiveRoom";
+import { useBroadcaster, useViewer, type CameraOpts } from "@/lib/rtc";
+import VideoFrame from "@/components/VideoFrame";
+import CameraControls from "@/components/CameraControls";
 
 const ROOMS = [
   { id: "culto", label: "Culto ao vivo" },
@@ -10,7 +11,8 @@ const ROOMS = [
 
 /** Telemóvel: envia a câmara para o computador (sala privada "cam-<sala>", só equipa). */
 function CameraSender({ room }: { room: string }) {
-  const { stream, viewers, error, start, stop } = useBroadcaster(`cam-${room}`);
+  const { stream, viewers, error, start, stop, setCamera } = useBroadcaster(`cam-${room}`);
+  const [opts, setOpts] = useState<Required<CameraOpts>>({ orientation: "horizontal", facing: "environment" });
 
   // Mantém o ecrã do telemóvel ligado enquanto filma.
   useEffect(() => {
@@ -20,18 +22,23 @@ function CameraSender({ room }: { room: string }) {
     return () => { lock?.release?.().catch?.(() => {}); };
   }, [stream]);
 
+  function change(v: Required<CameraOpts>) {
+    setOpts(v);
+    if (stream) setCamera(v); // já a filmar: muda na hora
+  }
+
   return (
     <div className="space-y-3">
-      <div className="aspect-video overflow-hidden rounded-xl bg-black">
-        {stream ? <Video stream={stream} muted /> : (
-          <div className="flex h-full items-center justify-center p-6 text-center text-sm text-slate-400">
-            Toque em “Começar a filmar”. O computador passa a ver esta imagem.
+      <VideoFrame stream={stream} muted
+        placeholder={
+          <div className="flex aspect-video h-full w-full items-center justify-center p-6 text-center text-sm text-slate-400">
+            Escolha a imagem (horizontal ou vertical) e toque em “Começar a filmar”. O computador passa a ver esta imagem.
           </div>
-        )}
-      </div>
+        } />
+      <CameraControls value={opts} onChange={change} />
       {error && <p className="rounded-lg bg-red-50 p-2 text-sm text-red-700">{error}</p>}
       {!stream ? (
-        <button onClick={() => start("camera")} className="rounded-lg bg-brand-terracotta px-4 py-2 text-sm font-bold text-white">
+        <button onClick={() => start("camera", opts)} className="rounded-lg bg-brand-terracotta px-4 py-2 text-sm font-bold text-white">
           Começar a filmar
         </button>
       ) : (
@@ -40,7 +47,10 @@ function CameraSender({ room }: { room: string }) {
           <span className="text-sm text-slate-600">{viewers ? "Computador ligado ✓" : "A aguardar o computador…"}</span>
         </div>
       )}
-      <p className="text-xs text-slate-500">Deixe esta página aberta. O ecrã do telemóvel fica ligado enquanto filma.</p>
+      <p className="text-xs text-slate-500">
+        Deixe esta página aberta. O ecrã do telemóvel fica ligado enquanto filma. Use ⛶ para ver a imagem em ecrã inteiro.
+        Se a imagem não rodar sozinha, desbloqueie a rotação do telemóvel ou escolha Horizontal/Vertical acima.
+      </p>
     </div>
   );
 }
@@ -51,13 +61,12 @@ function Monitor({ room }: { room: string }) {
   const live = useBroadcaster(room);
   return (
     <div className="space-y-3">
-      <div className="aspect-video overflow-hidden rounded-xl bg-black">
-        {stream ? <Video stream={stream} muted /> : (
-          <div className="flex h-full items-center justify-center p-6 text-center text-sm text-slate-400">
+      <VideoFrame stream={stream} muted
+        placeholder={
+          <div className="flex aspect-video h-full w-full items-center justify-center p-6 text-center text-sm text-slate-400">
             {error ?? `Sem imagem do telemóvel. ${status} — no telemóvel, escolha “Este aparelho é a câmara” na mesma sala.`}
           </div>
-        )}
-      </div>
+        } />
       {live.error && <p className="rounded-lg bg-red-50 p-2 text-sm text-red-700">{live.error}</p>}
       <div className="flex flex-wrap items-center gap-3">
         {!live.stream ? (

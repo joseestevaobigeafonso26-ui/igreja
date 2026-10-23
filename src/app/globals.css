@@ -18,3 +18,7 @@
 
 @keyframes ticker { from { transform: translateX(100%); } to { transform: translateX(-100%); } }
 .ticker-text { display: inline-block; white-space: nowrap; animation: ticker linear infinite; }
+
+/* Ecrã inteiro: a moldura de vídeo ocupa tudo, sem limites de proporção/altura */
+.fs-box:fullscreen { aspect-ratio: auto !important; width: 100vw !important; height: 100vh !important; max-width: none !important; max-height: none !important; border-radius: 0 !important; margin: 0 !important; }
+.fs-box:-webkit-full-screen { aspect-ratio: auto !important; width: 100vw !important; height: 100vh !important; max-width: none !important; max-height: none !important; border-radius: 0 !important; margin: 0 !important; }
