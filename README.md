@@ -3,7 +3,7 @@
 Next.js (App Router) + React + Tailwind + Supabase + WebRTC.
 
 ## Arrancar
-1. Crie um projeto no Supabase e execute `supabase/schema.sql` depois `schema_v2.sql`, `schema_v3.sql`, `schema_v4.sql`, `schema_v5.sql`, `schema_v6.sql`, `schema_v7.sql` e `schema_v8.sql` no SQL Editor.
+1. Crie um projeto no Supabase e execute `supabase/schema.sql` depois `schema_v2.sql`, `schema_v3.sql`, `schema_v4.sql`, `schema_v5.sql`, `schema_v6.sql`, `schema_v7.sql`, `schema_v8.sql` e `schema_v9.sql` no SQL Editor.
 2. Em Authentication → Sign In / Providers, ative **Allow anonymous sign-ins** (os espectadores entram assim, sem criar conta).
 2. `cp .env.example .env.local` e preencha URL e chave anon (Settings → API).
 3. Primeiro acesso do pastor: Supabase → Authentication → Users → Add user → Create new user (email + senha, marque *Auto Confirm User*). Depois, no SQL Editor: `update profiles set role = 'pastor' where id = (select id from auth.users where email = 'EMAIL_DO_PASTOR');`
@@ -62,3 +62,11 @@ O servidor decide o selo de cada mensagem (Responsável / Membro / visitante); n
 - **Sobre o vídeo:** na pré-visualização do responsável, as reações sobem e os últimos comentários aparecem por cima da imagem (somem após 15 s).
 - **Painel noutra janela/ecrã:** botão "Abrir painel de comentários" (ou `/painel/culto`, `/painel/discipulado`…, só equipa) com a lista grande, reações, fixar/responder/apagar. Ideal num segundo monitor, tablet ou telemóvel.
 - Atenção: se o responsável partilhar o **ecrã inteiro**, a página com a camada de comentários pode aparecer na transmissão. Prefira partilhar uma **janela ou aba** (ex.: os slides) e ver os comentários noutra janela, ou use o painel noutro aparelho.
+
+## Eco / retorno de som
+Quem assiste começa **sem som** (botão para ativar). O transmissor usa cancelamento de eco, redução de ruído e ganho automático, e tem botão para silenciar o som enviado.
+Limite físico: vários telemóveis a tocar o mesmo áudio com atrasos diferentes, perto uns dos outros ou do microfone, produzem eco que o software não remove — quem está na igreja deve ficar sem som ou usar fones.
+
+## Banner de informações (rodapé estilo telejornal)
+Opcional. Em **/admin → Banner ao vivo** (ou no painel de transmissão) escreva uma informação por linha; desliza no rodapé do vídeo enquanto a sala está ao vivo e atualiza em tempo real.
+É uma camada do site (não vai nos pixels do vídeo, por isso não aparece em gravações da transmissão).

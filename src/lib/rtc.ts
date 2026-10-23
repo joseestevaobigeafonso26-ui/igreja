@@ -165,11 +165,15 @@ async function openPublicChannel(room: string, onSignal: (s: Signal) => void): P
 
 export type Source = "tela" | "camera";
 
+// Microfone com cancelamento de eco, redução de ruído e ganho automático (ajuda contra retorno de som).
+const AUDIO_CONSTRAINTS: MediaTrackConstraints = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+
 /* ───────────── Transmissor (pastor / professor) ───────────── */
 export function useBroadcaster(room: string) {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [viewers, setViewers] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [micOn, setMicOn] = useState(true);
   const peers = useRef(new Map<string, RTCPeerConnection>());
   const chRef = useRef<Link | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -207,17 +211,18 @@ export function useBroadcaster(room: string) {
         // Se o ecrã não trouxer áudio, junta o microfone para a voz do pregador.
         if (media.getAudioTracks().length === 0) {
           try {
-            const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mic = await navigator.mediaDevices.getUserMedia({ audio: AUDIO_CONSTRAINTS });
             mic.getAudioTracks().forEach((t) => media.addTrack(t));
           } catch {}
         }
       } else {
         media = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "environment", width: { ideal: 1280 } },
-          audio: true,
+          audio: AUDIO_CONSTRAINTS,
         });
       }
       streamRef.current = media;
+      setMicOn(true);
       const vt = media.getVideoTracks()[0];
       if (vt) vt.onended = () => stop(); // botão "Parar partilha" do navegador
 
@@ -283,7 +288,15 @@ export function useBroadcaster(room: string) {
   }, [room, stop]);
 
   useEffect(() => () => { if (streamRef.current) stop(); }, [stop]);
-  return { stream, viewers, error, start, stop };
+  /** Liga/desliga o áudio que está a ser enviado (sem parar o vídeo). */
+  const toggleMic = useCallback(() => {
+    const tracks = streamRef.current?.getAudioTracks() ?? [];
+    const on = tracks.some((t) => t.enabled);
+    tracks.forEach((t) => (t.enabled = !on));
+    setMicOn(!on);
+  }, []);
+
+  return { stream, viewers, error, start, stop, micOn, toggleMic };
 }
 
 /* ───────────── Espectador (qualquer pessoa, sem conta) ───────────── */
@@ -389,4 +402,20 @@ export function useIsLive(room: string) {
     return () => { supabase.removeChannel(ch); };
   }, [room]);
   return live;
+}
+
+/** Banner de informações (rodapé estilo telejornal): texto opcional preenchido pela equipa, atualizado em tempo real. */
+export function useBanner(room: string) {
+  const [banner, setBanner] = useState<{ texto: string; ativo: boolean }>({ texto: "", ativo: false });
+  useEffect(() => {
+    const apply = (r: any) => setBanner({ texto: (r?.banner ?? "").trim(), ativo: !!r?.banner_ativo });
+    supabase.from("live_sessions").select("banner, banner_ativo").eq("room", room).single()
+      .then(({ data }) => apply(data));
+    const ch = supabase.channel(`banner:${room}:${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "live_sessions", filter: `room=eq.${room}` },
+        (p) => apply(p.new))
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [room]);
+  return banner.ativo && banner.texto ? banner.texto : "";
 }

@@ -4,6 +4,7 @@ import { useState } from "react";
 import TableEditor, { type Field } from "@/components/TableEditor";
 import UsersManager from "@/components/UsersManager";
 import RemoteCamera from "@/components/RemoteCamera";
+import BannerEditor from "@/components/BannerEditor";
 import { useRole } from "@/lib/auth";
 
 const T: Record<string, { label: string; fields: Field[]; orderBy?: string }> = {
@@ -50,6 +51,23 @@ const T: Record<string, { label: string; fields: Field[]; orderBy?: string }> = 
   },
 };
 
+function BannerPanel() {
+  const rooms = [["culto", "Culto"], ["discipulado", "Discipulado"], ["teologia", "Teologia"], ["agenda", "Agenda"]];
+  const [room, setRoom] = useState("culto");
+  return (
+    <div className="max-w-2xl space-y-3">
+      <p className="text-sm text-slate-500">Texto que desliza no rodapé do vídeo enquanto a sala estiver ao vivo. É opcional; pode preparar antes e alterar durante a transmissão.</p>
+      <div className="flex flex-wrap gap-2">
+        {rooms.map(([k, l]) => (
+          <button key={k} onClick={() => setRoom(k)}
+            className={`rounded-lg px-3 py-2 text-sm ${room === k ? "bg-brand-terracotta font-semibold text-white" : "border border-slate-300 bg-white"}`}>{l}</button>
+        ))}
+      </div>
+      <BannerEditor key={room} room={room} />
+    </div>
+  );
+}
+
 export default function Admin() {
   const { isStaff, canManageUsers, loading } = useRole();
   const [tab, setTab] = useState("avisos");
@@ -61,6 +79,8 @@ export default function Admin() {
     <>
       <h1 className="text-xl font-bold">Administração de conteúdo</h1>
       <div className="flex flex-wrap gap-2">
+        <button onClick={() => setTab("banner")}
+          className={`rounded-lg px-3 py-2 text-sm ${tab === "banner" ? "bg-brand-terracotta font-semibold text-white" : "bg-white"}`}>Banner ao vivo</button>
         <button onClick={() => setTab("camera")}
           className={`rounded-lg px-3 py-2 text-sm ${tab === "camera" ? "bg-brand-terracotta font-semibold text-white" : "bg-white"}`}>Câmara remota</button>
         {canManageUsers && (
@@ -72,7 +92,7 @@ export default function Admin() {
             className={`rounded-lg px-3 py-2 text-sm ${tab === k ? "bg-brand-terracotta font-semibold text-white" : "bg-white"}`}>{v.label}</button>
         ))}
       </div>
-      {tab === "camera" ? <RemoteCamera /> : tab === "users" && canManageUsers ? <UsersManager /> : <TableEditor key={tab} table={tab} fields={t.fields} orderBy={t.orderBy} />}
+      {tab === "banner" ? <BannerPanel /> : tab === "camera" ? <RemoteCamera /> : tab === "users" && canManageUsers ? <UsersManager /> : <TableEditor key={tab} table={tab} fields={t.fields} orderBy={t.orderBy} />}
     </>
   );
 }
