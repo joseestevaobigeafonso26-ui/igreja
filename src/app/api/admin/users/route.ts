@@ -9,16 +9,20 @@ function adminClient() {
   });
 }
 
-/** Só pastor/admin autenticados passam. Devolve o cliente admin e o id de quem chamou. */
-async function authorize(req: NextRequest) {
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) throw new Error("SUPABASE_SERVICE_ROLE_KEY não configurada no servidor.");
+/** Só pastor/admin autenticados passam. Devolve o cliente admin e o id de quem chamou, ou o MOTIVO da recusa (texto). */
+async function authorize(req: NextRequest): Promise<{ admin: ReturnType<typeof adminClient>; callerId: string } | string> {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) throw new Error("SUPABASE_SERVICE_ROLE_KEY não configurada no servidor (Vercel → Settings → Environment Variables) — depois faça Redeploy.");
   const token = req.headers.get("authorization")?.replace("Bearer ", "");
-  if (!token) return null;
+  if (!token || token === "undefined") return "Sessão não recebida. Saia e entre de novo.";
   const admin = adminClient();
-  const { data: { user } } = await admin.auth.getUser(token);
-  if (!user || user.is_anonymous) return null;
+  const { data: { user }, error } = await admin.auth.getUser(token);
+  if (error || !user) return "Sessão inválida ou expirada. Saia e entre de novo; se continuar, confira a chave SUPABASE_SERVICE_ROLE_KEY no Vercel.";
+  if (user.is_anonymous) return "Entre com a sua conta de pastor/admin.";
   const { data: p } = await admin.from("profiles").select("role").eq("id", user.id).single();
-  if (!p || !["pastor", "admin"].includes(p.role)) return null;
+  if (!p) return "O servidor não consegue ler o seu perfil. Confira no Vercel a chave SUPABASE_SERVICE_ROLE_KEY: deve ser a service_role (secreta), NÃO a anon/publishable. Depois faça Redeploy.";
+  const { data: act } = await admin.from("profiles").select("ativo").eq("id", user.id).single();
+  if (act && act.ativo === false) return "A sua conta não está ativada.";
+  if (!["pastor", "admin"].includes(p.role)) return `A sua conta tem o papel "${p.role}"; é preciso pastor ou admin.`;
   return { admin, callerId: user.id };
 }
 
@@ -26,7 +30,7 @@ const fail = (msg: string, status = 400) => NextResponse.json({ error: msg }, { 
 
 export async function GET(req: NextRequest) {
   try {
-    const a = await authorize(req); if (!a) return fail("Sem permissão.", 403);
+    const a = await authorize(req); if (typeof a === "string") return fail(a, 403);
     const { data } = await a.admin.auth.admin.listUsers({ perPage: 200 });
     const { data: profiles } = await a.admin.from("profiles").select("id, nome, role, ativo");
     const users = (data?.users ?? [])
@@ -41,7 +45,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const a = await authorize(req); if (!a) return fail("Sem permissão.", 403);
+    const a = await authorize(req); if (typeof a === "string") return fail(a, 403);
     const { email, password, nome, role } = await req.json();
     if (!email || !password) return fail("Email e senha são obrigatórios.");
     if (String(password).length < 8) return fail("A senha deve ter pelo menos 8 caracteres.");
@@ -56,7 +60,7 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const a = await authorize(req); if (!a) return fail("Sem permissão.", 403);
+    const a = await authorize(req); if (typeof a === "string") return fail(a, 403);
     const { id, role, nome, password, ativo } = await req.json();
     if (!id) return fail("Falta o id.");
     if (role !== undefined) {
@@ -82,7 +86,7 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const a = await authorize(req); if (!a) return fail("Sem permissão.", 403);
+    const a = await authorize(req); if (typeof a === "string") return fail(a, 403);
     const { id } = await req.json();
     if (!id) return fail("Falta o id.");
     if (id === a.callerId) return fail("Não pode apagar a sua própria conta.");
