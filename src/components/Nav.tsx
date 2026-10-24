@@ -5,7 +5,8 @@ import { supabase } from "@/lib/supabase";
 import { useRole } from "@/lib/auth";
 
 const links = [
-  { href: "/", label: "Culto ao vivo" },
+  { href: "/", label: "Início" },
+  { href: "/culto", label: "Culto ao vivo" },
   { href: "/discipulado", label: "Discipulado" },
   { href: "/teologia", label: "Teologia" },
   { href: "/agenda", label: "Agenda" },

@@ -2,6 +2,8 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import Interaction from "@/components/Interaction";
+import VerseControl from "@/components/VerseControl";
+import BannerEditor from "@/components/BannerEditor";
 import { useIdentity, useLiveFeed } from "@/lib/liveFeed";
 import { useRole } from "@/lib/auth";
 
@@ -27,6 +29,8 @@ export default function Painel() {
     <div className="mx-auto max-w-xl space-y-3 rounded-2xl bg-white p-4 shadow-sm">
       <h1 className="text-lg font-bold">Painel ao vivo — {cfg.titulo}</h1>
       <p className="text-xs text-slate-500">Deixe esta janela aberta. Os comentários só abrem enquanto a transmissão estiver ao vivo.</p>
+      <VerseControl room={room} />
+      <BannerEditor room={room} compact />
       <Interaction mode={cfg.mode} feed={feed} id={id} tall />
     </div>
   );

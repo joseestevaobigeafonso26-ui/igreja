@@ -92,3 +92,8 @@ Sem servidor de vídeo e sem contas em serviços de fora: só Supabase + Vercel 
 - O culto e a agenda continuam abertos ao público, no sistema anterior.
 
 **Testar o motor** (professor + 3 alunos com vídeo real num Chromium de teste): ver `tools/aula-test/`.
+
+## Página Início e texto bíblico (schema_v12.sql)
+- `/` é agora a página **Início** (agenda dos próximos encontros calculada em hora de Angola, eventos com data, avisos, palavra da semana, ministérios, galeria e contactos). O culto ao vivo passou para `/culto`.
+- Conteúdo em **/admin**: *Info da igreja* (contactos, quem somos, palavra da semana…), *Eventos (datas)*, *Agenda*, *Avisos*.
+- **Texto bíblico no ecrã**: em /admin → *Texto bíblico*, no painel do transmissor ou em `/painel/culto` (segundo aparelho). Aparece por cima do vídeo a quem assiste, sem partilhar janelas. É uma camada do site (não vai nos pixels do vídeo).

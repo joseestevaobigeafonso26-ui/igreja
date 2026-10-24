@@ -480,3 +480,18 @@ export function useBanner(room: string) {
   }, [room]);
   return banner.ativo && banner.texto ? banner.texto : "";
 }
+
+/** Texto bíblico mostrado por cima do vídeo (opcional): a equipa escolhe e aparece em tempo real a quem assiste. */
+export type Verso = { ref: string; texto: string } | null;
+export function useVerse(room: string): Verso {
+  const [v, setV] = useState<Verso>(null);
+  useEffect(() => {
+    const apply = (r: any) => { const x = r?.verso; setV(x && x.texto ? { ref: String(x.ref ?? ""), texto: String(x.texto) } : null); };
+    supabase.from("live_sessions").select("verso").eq("room", room).single().then(({ data }) => apply(data));
+    const ch = supabase.channel(`verso:${room}:${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "live_sessions", filter: `room=eq.${room}` }, (p) => apply(p.new))
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [room]);
+  return v;
+}

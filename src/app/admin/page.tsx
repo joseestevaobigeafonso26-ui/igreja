@@ -5,10 +5,21 @@ import TableEditor, { type Field } from "@/components/TableEditor";
 import UsersManager from "@/components/UsersManager";
 import RemoteCamera from "@/components/RemoteCamera";
 import BannerEditor from "@/components/BannerEditor";
+import VerseControl from "@/components/VerseControl";
+import InfoEditor from "@/components/InfoEditor";
 import SalasManager from "@/components/SalasManager";
 import { useRole } from "@/lib/auth";
 
 const T: Record<string, { label: string; fields: Field[]; orderBy?: string }> = {
+  eventos: {
+    label: "Eventos (datas)", orderBy: "data",
+    fields: [
+      { key: "data", label: "Data", type: "date" }, { key: "hora", label: "Hora", type: "time" },
+      { key: "titulo", label: "Título" }, { key: "descricao", label: "Descrição", type: "textarea" },
+      { key: "local", label: "Local" }, { key: "destaque", label: "Destaque ⭐", type: "checkbox" },
+      { key: "transmissao", label: "Ao vivo?", type: "checkbox" },
+    ],
+  },
   avisos: { label: "Avisos", fields: [{ key: "titulo", label: "Título" }, { key: "corpo", label: "Texto", type: "textarea" }], orderBy: "created_at" },
   agenda: {
     label: "Agenda", orderBy: "dia_semana",
@@ -52,6 +63,22 @@ const T: Record<string, { label: string; fields: Field[]; orderBy?: string }> = 
   },
 };
 
+function VersePanel() {
+  const [room, setRoom] = useState("culto");
+  return (
+    <div className="max-w-2xl space-y-3">
+      <p className="text-sm text-slate-500">Prepare os textos bíblicos antes do culto e mostre-os por cima do vídeo com um toque — não precisa partilhar janelas.</p>
+      <div className="flex gap-2">
+        {[["culto", "Culto"], ["agenda", "Agenda"]].map(([k, l]) => (
+          <button key={k} onClick={() => setRoom(k)}
+            className={`rounded-lg px-3 py-2 text-sm ${room === k ? "bg-brand-terracotta font-semibold text-white" : "border border-slate-300 bg-white"}`}>{l}</button>
+        ))}
+      </div>
+      <VerseControl key={room} room={room} />
+    </div>
+  );
+}
+
 function BannerPanel() {
   const rooms = [["culto", "Culto"], ["agenda", "Agenda"]];
   const [room, setRoom] = useState("culto");
@@ -80,6 +107,10 @@ export default function Admin() {
     <>
       <h1 className="text-xl font-bold">Administração de conteúdo</h1>
       <div className="flex flex-wrap gap-2">
+        <button onClick={() => setTab("verso")}
+          className={`rounded-lg px-3 py-2 text-sm ${tab === "verso" ? "bg-brand-terracotta font-semibold text-white" : "bg-white"}`}>Texto bíblico</button>
+        <button onClick={() => setTab("info")}
+          className={`rounded-lg px-3 py-2 text-sm ${tab === "info" ? "bg-brand-terracotta font-semibold text-white" : "bg-white"}`}>Info da igreja</button>
         <button onClick={() => setTab("banner")}
           className={`rounded-lg px-3 py-2 text-sm ${tab === "banner" ? "bg-brand-terracotta font-semibold text-white" : "bg-white"}`}>Banner ao vivo</button>
         <button onClick={() => setTab("camera")}
@@ -97,7 +128,7 @@ export default function Admin() {
             className={`rounded-lg px-3 py-2 text-sm ${tab === k ? "bg-brand-terracotta font-semibold text-white" : "bg-white"}`}>{v.label}</button>
         ))}
       </div>
-      {tab === "salas" && canManageUsers ? <SalasManager /> : tab === "banner" ? <BannerPanel /> : tab === "camera" ? <RemoteCamera /> : tab === "users" && canManageUsers ? <UsersManager /> : <TableEditor key={tab} table={tab} fields={t.fields} orderBy={t.orderBy} />}
+      {tab === "verso" ? <VersePanel /> : tab === "info" ? <InfoEditor /> : tab === "salas" && canManageUsers ? <SalasManager /> : tab === "banner" ? <BannerPanel /> : tab === "camera" ? <RemoteCamera /> : tab === "users" && canManageUsers ? <UsersManager /> : <TableEditor key={tab} table={tab} fields={t.fields} orderBy={t.orderBy} />}
     </>
   );
 }

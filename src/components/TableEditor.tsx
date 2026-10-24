@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-export type Field = { key: string; label: string; type?: "text" | "number" | "time" | "checkbox" | "textarea" | "select"; options?: string[] };
+export type Field = { key: string; label: string; type?: "text" | "number" | "time" | "date" | "checkbox" | "textarea" | "select"; options?: string[] };
 type Row = Record<string, any>;
 
 function Input({ f, value, onChange }: { f: Field; value: any; onChange: (v: any) => void }) {

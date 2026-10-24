@@ -1,12 +1,14 @@
 "use client";
 import { useState } from "react";
-import { useBanner, useBroadcaster, useIsLive, useViewer, type CameraOpts, type Source } from "@/lib/rtc";
+import { useBanner, useBroadcaster, useIsLive, useVerse, useViewer, type CameraOpts, type Source } from "@/lib/rtc";
 import CameraControls from "@/components/CameraControls";
 import { useRole } from "@/lib/auth";
 import Interaction from "@/components/Interaction";
 import FeedOverlay from "@/components/FeedOverlay";
 import BannerTicker from "@/components/BannerTicker";
 import BannerEditor from "@/components/BannerEditor";
+import VerseOverlay from "@/components/VerseOverlay";
+import VerseControl from "@/components/VerseControl";
 import VideoFrame, { Video } from "@/components/VideoFrame";
 
 export { Video }; // compatibilidade: outros ficheiros importavam daqui
@@ -16,6 +18,7 @@ function Viewer({ room }: { room: string }) {
   const { stream, error, status } = useViewer(room);
   const live = useIsLive(room);
   const banner = useBanner(room);
+  const verso = useVerse(room);
   const [som, setSom] = useState(false); // começa sem som: evita eco entre telemóveis na mesma sala
 
   return (
@@ -26,6 +29,7 @@ function Viewer({ room }: { room: string }) {
             {error ?? (live ? status : "Sem transmissão neste momento. Quando começar, o vídeo aparece aqui automaticamente.")}
           </div>
         }>
+        {live && <VerseOverlay verso={verso} lift={banner ? 84 : 52} />}
         {live && <BannerTicker texto={banner} lift={44} />}
       </VideoFrame>
       {stream && (
@@ -46,6 +50,7 @@ function Viewer({ room }: { room: string }) {
 function Broadcaster({ room, feed }: { room: string; feed: Feed }) {
   const { stream, viewers, error, start, stop, micOn, toggleMic, setCamera } = useBroadcaster(room);
   const banner = useBanner(room);
+  const verso = useVerse(room);
   const [source, setSource] = useState<Source>("tela");
   const [cam, setCam] = useState<Required<CameraOpts>>({ orientation: "horizontal", facing: "environment" });
   const [iniciou, setIniciou] = useState<Source>("tela"); // fonte realmente em uso
@@ -59,6 +64,7 @@ function Broadcaster({ room, feed }: { room: string; feed: Feed }) {
             Escolha a fonte e clique em iniciar. A sua pré-visualização aparece aqui.
           </div>
         }>
+        <VerseOverlay verso={verso} lift={banner ? 40 : 8} />
         <FeedOverlay feed={feed} lift={!!banner} />
         <BannerTicker texto={banner} />
       </VideoFrame>
@@ -98,6 +104,7 @@ function Broadcaster({ room, feed }: { room: string; feed: Feed }) {
         Contra eco: use fones ou microfone de lapela, mantenha este aparelho longe das colunas e dos telemóveis de quem assiste, e silencie o som quando não estiver a falar.
       </p>
       <BannerEditor room={room} compact />
+      <VerseControl room={room} />
     </div>
   );
 }
