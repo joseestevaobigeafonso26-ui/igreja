@@ -97,3 +97,10 @@ Sem servidor de vídeo e sem contas em serviços de fora: só Supabase + Vercel 
 - `/` é agora a página **Início** (agenda dos próximos encontros calculada em hora de Angola, eventos com data, avisos, palavra da semana, ministérios, galeria e contactos). O culto ao vivo passou para `/culto`.
 - Conteúdo em **/admin**: *Info da igreja* (contactos, quem somos, palavra da semana…), *Eventos (datas)*, *Agenda*, *Avisos*.
 - **Texto bíblico no ecrã**: em /admin → *Texto bíblico*, no painel do transmissor ou em `/painel/culto` (segundo aparelho). Aparece por cima do vídeo a quem assiste, sem partilhar janelas. É uma camada do site (não vai nos pixels do vídeo).
+
+## Logo e aplicação instalável (PWA)
+- O logo está em `public/logo.png` (fundo transparente, 512 px) e aparece no cabeçalho e no Início a girar devagar (`.logo-spin` em `globals.css`; para parar, use `<Logo spin={false} />`). Quem pede "menos movimento" no telemóvel não o vê a girar.
+- Ícones em `public/icons/` e `src/app/icon.png` / `apple-icon.png`; imagem de partilha (WhatsApp/Facebook) em `public/og.png`. Para trocar o logo, substitua esses ficheiros.
+- Instalação: `src/app/manifest.ts` + `public/sw.js` (só guarda a página "sem ligação"; vídeo, API e Supabase nunca passam pela cache). Funciona só em HTTPS (o Vercel já é).
+- Android/computador: botão **📲 Instalar aplicação**. iPhone: o botão mostra o passo a passo (Partilhar → Adicionar ao ecrã principal).
+- Opcional: defina `NEXT_PUBLIC_SITE_URL` (ex.: `https://seusite.com`) no Vercel para a imagem de partilha usar o seu domínio.

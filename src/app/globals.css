@@ -22,3 +22,9 @@
 /* Ecrã inteiro: a moldura de vídeo ocupa tudo, sem limites de proporção/altura */
 .fs-box:fullscreen { aspect-ratio: auto !important; width: 100vw !important; height: 100vh !important; max-width: none !important; max-height: none !important; border-radius: 0 !important; margin: 0 !important; }
 .fs-box:-webkit-full-screen { aspect-ratio: auto !important; width: 100vw !important; height: 100vh !important; max-width: none !important; max-height: none !important; border-radius: 0 !important; margin: 0 !important; }
+
+/* Logo a girar devagar (para se o aparelho pedir menos movimento; pausa ao passar o rato) */
+@keyframes logo-spin { to { transform: rotate(360deg); } }
+.logo-spin { animation: logo-spin 36s linear infinite; }
+.logo-spin:hover { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .logo-spin { animation: none; } }

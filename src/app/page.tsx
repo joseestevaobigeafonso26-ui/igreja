@@ -1,4 +1,6 @@
 import Link from "next/link";
+import Logo from "@/components/Logo";
+import InstallApp from "@/components/InstallApp";
 import { agoraLuanda, getAgenda, getAoVivo, getAvisos, getEventos, getGaleria, getInfo, getMinisterios } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
@@ -33,9 +35,14 @@ export default async function Inicio() {
     <div className="space-y-8">
       {/* Topo */}
       <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-brand-dark via-brand-charcoal to-brand-terracotta-dark p-6 text-white shadow-lg sm:p-10">
-        <p className="text-xs font-bold uppercase tracking-[0.25em] text-amber-300">Bem-vindo à</p>
-        <h1 className="mt-1 text-2xl font-extrabold sm:text-4xl">Igreja Comunitária Batista do Vale do Quixicongo</h1>
-        <p className="mt-2 max-w-2xl text-slate-200">{info?.lema ?? "Uma Igreja Voltada ao Discipulado"}</p>
+        <div className="flex flex-col-reverse items-center gap-6 sm:flex-row sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.25em] text-amber-300">Bem-vindo à</p>
+            <h1 className="mt-1 text-2xl font-extrabold sm:text-4xl">Igreja Comunitária Batista do Vale do Quixicongo</h1>
+            <p className="mt-2 max-w-2xl text-slate-200">{info?.lema ?? "Uma Igreja Voltada ao Discipulado"}</p>
+          </div>
+          <Logo size={200} className="!shadow-2xl ring-4 ring-amber-300/40" />
+        </div>
         <div className="mt-5 flex flex-wrap gap-3">
           {aoVivoAgora.length > 0 ? aoVivoAgora.map((s) => (
             <Link key={s.room} href={SALAS[s.room].href}
@@ -44,6 +51,7 @@ export default async function Inicio() {
             <Link href="/agenda" className="rounded-xl bg-white/10 px-5 py-3 font-semibold ring-1 ring-white/30">Ver a agenda da semana</Link>
           )}
           <Link href="/culto" className="rounded-xl bg-amber-400 px-5 py-3 font-bold text-slate-900">Culto ao vivo</Link>
+          <InstallApp className="!rounded-xl !px-5 !py-3 !text-base ring-1 ring-white/30" />
           {zap && <a href={`https://wa.me/${zap}`} target="_blank" rel="noreferrer" className="rounded-xl bg-green-600 px-5 py-3 font-bold text-white">WhatsApp</a>}
         </div>
       </section>
